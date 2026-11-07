@@ -9,6 +9,7 @@ use Flytachi\Winter\SDK\S5w\Entity\Folder;
 use Flytachi\Winter\SDK\S5w\Entity\Page;
 use Flytachi\Winter\SDK\S5w\Enum\FileSort;
 use Flytachi\Winter\SDK\S5w\Enum\SortDirection;
+use Flytachi\Winter\SDK\S5w\Exception\ConflictException;
 use Flytachi\Winter\SDK\S5w\Exception\NotFoundException;
 use Flytachi\Winter\SDK\S5w\Exception\PayloadTooLargeException;
 use Flytachi\Winter\SDK\S5w\Exception\ValidationException;
@@ -29,6 +30,8 @@ use Flytachi\Winter\SDK\S5w\Support\Source;
  * $s5w->files()->get('FXOkqegbdrNRWQgc');                       // File, or NotFoundException
  * $s5w->files()->find($id);                                     // ?File
  * $s5w->files()->list(folder: 'docs', sort: FileSort::SIZE);     // Page<File>
+ * $s5w->files()->rename($file, 'Q3 report.pdf');
+ * $s5w->files()->move($file, 'archive');                        // or Folder::ROOT
  * $s5w->files()->delete($file);
  * foreach ($s5w->files()->all(folder: Folder::ROOT) as $file) { … }
  * ```
@@ -154,6 +157,46 @@ final readonly class Files
         $this->http->call('DELETE', self::path($id, 'DELETE'));
     }
 
+    /**
+     * Rename a file; it stays in its folder. The id does not change, so every URL and
+     * temporary link keeps working — under the new name.
+     *
+     * The server takes the name as it is: the extension is not added or checked.
+     * Reads the file first (the server replaces name and folder together).
+     *
+     * @param string $name 1–255 characters, unique in the folder
+     *
+     * @throws NotFoundException no such file
+     * @throws ConflictException a file with that name is already in the folder
+     */
+    public function rename(string|File $id, string $name): File
+    {
+        $current = $this->get($id);
+
+        return $this->place($current, $name, $current->folder);
+    }
+
+    /**
+     * Move a file to another folder, or to the bucket root; the name stays. The id does
+     * not change, so URLs and temporary links keep working.
+     *
+     * The destination decides: a public folder makes the file public, a private one
+     * private, and its retention is applied from the file's creation date. The bucket
+     * root makes a file public. Reads the file first.
+     *
+     * @param string|Folder|null $folder destination; null or {@see Folder::ROOT} — the root
+     *
+     * @throws NotFoundException   no such file
+     * @throws ValidationException no such folder
+     * @throws ConflictException   a file with that name is already in the destination
+     */
+    public function move(string|File $id, string|Folder|null $folder): File
+    {
+        $current = $this->get($id);
+
+        return $this->place($current, $current->name, Folder::nameOf($folder));
+    }
+
     // ── Uploading ────────────────────────────────────────────────────────────
 
     /**
@@ -165,7 +208,7 @@ final readonly class Files
      * or the session id, call `uploads()->send()` yourself.
      *
      * @param string|\SplFileInfo $file   path to a readable file
-     * @param string|null         $folder folder name; null — the bucket root
+     * @param string|Folder|null  $folder folder name or entity; null — the bucket root
      * @param string|null         $name   stored name; null — the file's own name.
      *                                    Taken in the folder already → `name (1).ext`.
      *                                    Uploading a temporary file (e.g. a request upload's
@@ -178,7 +221,7 @@ final readonly class Files
      */
     public function upload(
         string|\SplFileInfo $file,
-        ?string $folder = null,
+        string|Folder|null $folder = null,
         ?string $name = null,
         ?ImageOptions $imageOptions = null,
     ): File {
@@ -204,7 +247,7 @@ final readonly class Files
     public function uploadContent(
         string $content,
         string $name,
-        ?string $folder = null,
+        string|Folder|null $folder = null,
         ?ImageOptions $imageOptions = null,
     ): File {
         if (strlen($content) > $this->http->config()->chunkThreshold) {
@@ -216,12 +259,13 @@ final readonly class Files
 
     private function send(
         \CURLFile|\CURLStringFile $part,
-        ?string $folder,
+        string|Folder|null $folder,
         ?string $name,
         ?ImageOptions $imageOptions,
     ): File {
         $fields = ['file' => $part];
-        if ($folder !== null && $folder !== '') {
+        $folder = Folder::nameOf($folder);
+        if ($folder !== null) {
             $fields['folder'] = $folder;
         }
         if ($name !== null && $name !== '') {
@@ -234,6 +278,17 @@ final readonly class Files
         $request = $this->http->transferRequest('POST', self::PATH)->withMultipartBody($fields);
 
         return File::fromPayload($this->http->sendJson($request, 'POST', self::PATH));
+    }
+
+    /** `PUT` replaces both: the name and the folder (null — the root). */
+    private function place(File $file, string $name, ?string $folder): File
+    {
+        $path = self::path($file, 'PUT');
+
+        return File::fromPayload($this->http->json('PUT', $path, [
+            'name' => $name,
+            'folder' => $folder,
+        ]));
     }
 
     /**

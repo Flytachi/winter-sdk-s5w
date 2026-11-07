@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\SDK\S5w\Api;
 
 use Flytachi\Winter\SDK\S5w\Entity\File;
+use Flytachi\Winter\SDK\S5w\Entity\Folder;
 use Flytachi\Winter\SDK\S5w\Entity\UploadSession;
 use Flytachi\Winter\SDK\S5w\Exception\ApiException;
 use Flytachi\Winter\SDK\S5w\Exception\ConflictException;
@@ -78,12 +79,13 @@ final readonly class Uploads
     public function start(
         string $name,
         int $size,
-        ?string $folder = null,
+        string|Folder|null $folder = null,
         ?string $sha256 = null,
         ?ImageOptions $imageOptions = null,
     ): UploadSession {
         $body = ['name' => $name, 'size' => $size];
-        if ($folder !== null && $folder !== '') {
+        $folder = Folder::nameOf($folder);
+        if ($folder !== null) {
             $body['folder'] = $folder;
         }
         if ($sha256 !== null) {
@@ -178,7 +180,7 @@ final readonly class Uploads
      * (retries as warnings) — whether or not callbacks are passed.
      *
      * @param string|\SplFileInfo $file a readable file
-     * @param string|null $folder      folder name; null — the bucket root
+     * @param string|Folder|null $folder folder name or entity; null — the bucket root
      * @param string|null $name        stored name; null — the file's own name
      * @param bool        $deduplicate hash locally and skip the transfer for known content.
      *                                 Not done with image options (see {@see start()}).
@@ -197,7 +199,7 @@ final readonly class Uploads
      */
     public function send(
         string|\SplFileInfo $file,
-        ?string $folder = null,
+        string|Folder|null $folder = null,
         ?string $name = null,
         ?ImageOptions $imageOptions = null,
         bool $deduplicate = true,
@@ -220,14 +222,14 @@ final readonly class Uploads
      *
      * @param string      $content the bytes
      * @param string      $name    stored name, with the extension
-     * @param string|null $folder  folder name; null — the bucket root
+     * @param string|Folder|null $folder folder name or entity; null — the bucket root
      * @param (callable(UploadSession $session): void)|null $onStart    as in {@see send()}
      * @param (callable(int $sent, int $total): void)|null  $onProgress as in {@see send()}
      */
     public function sendContent(
         string $content,
         string $name,
-        ?string $folder = null,
+        string|Folder|null $folder = null,
         ?ImageOptions $imageOptions = null,
         bool $deduplicate = true,
         ?callable $onStart = null,
@@ -297,7 +299,7 @@ final readonly class Uploads
      */
     public function sendSource(
         Source $source,
-        ?string $folder,
+        string|Folder|null $folder,
         ?string $name,
         ?ImageOptions $imageOptions,
         bool $deduplicate = true,

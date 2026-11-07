@@ -31,6 +31,21 @@ final readonly class Folder implements \JsonSerializable
     ) {
     }
 
+    /**
+     * The folder name a destination stands for: a name, a Folder, or null for the root
+     * (also `''` and {@see ROOT}).
+     *
+     * @internal
+     */
+    public static function nameOf(string|self|null $folder): ?string
+    {
+        return match (true) {
+            $folder instanceof self => $folder->name,
+            $folder === null, $folder === '', $folder === self::ROOT => null,
+            default => $folder,
+        };
+    }
+
     /** @internal */
     public static function fromPayload(Payload $p): self
     {
