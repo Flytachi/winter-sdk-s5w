@@ -43,7 +43,9 @@ final class S5w
 
     /**
      * @param CastClient|null      $client Custom HTTP client (own middleware, proxies, cURL options).
-     * @param LoggerInterface|null $logger Logs method, URL, status and timing at debug level.
+     * @param LoggerInterface|null $logger One debug line per request (method, path, status, time)
+     *                                     and the SDK's own events (uploads: start, retries, end).
+     *                                     Never the key.
      */
     public function __construct(
         S5wConfig $config,

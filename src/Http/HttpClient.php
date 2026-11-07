@@ -9,14 +9,13 @@ use Flytachi\Winter\Cast\Common\CastHeader;
 use Flytachi\Winter\Cast\Common\CastRequest;
 use Flytachi\Winter\Cast\Common\CastResponse;
 use Flytachi\Winter\Cast\Exception\CastException;
-use Flytachi\Winter\Cast\Stereotype\LoggingMiddleware;
 use Flytachi\Winter\SDK\S5w\Exception\ApiException;
 use Flytachi\Winter\SDK\S5w\Exception\ResponseException;
 use Flytachi\Winter\SDK\S5w\Exception\TransportException;
 use Flytachi\Winter\SDK\S5w\S5wConfig;
+use Flytachi\Winter\SDK\S5w\Support\InterpolatingLogger;
 use Flytachi\Winter\SDK\S5w\Support\Payload;
 use Psr\Log\LoggerInterface;
-use Psr\Log\LogLevel;
 use Psr\Log\NullLogger;
 
 /**
@@ -36,18 +35,18 @@ final class HttpClient
     private readonly LoggerInterface $logger;
 
     /**
-     * @param CastClient|null      $client Bring your own to add middleware or cURL defaults.
-     *                                     HTTP request logging is added only to the client the
-     *                                     SDK builds itself; the SDK's own events are logged either way.
-     * @param LoggerInterface|null $logger null — nothing is logged
+     * @param CastClient|null      $client Bring your own to add middleware or cURL defaults
+     *                                     (e.g. winter-cast's LoggingMiddleware for a full HTTP trace).
+     * @param LoggerInterface|null $logger Gets one debug line per request and the SDK's own events;
+     *                                     null — nothing is logged.
      */
     public function __construct(
         private readonly S5wConfig $config,
         ?CastClient $client = null,
         ?LoggerInterface $logger = null,
     ) {
-        $this->client = $client ?? self::defaultClient($config, $logger);
-        $this->logger = $logger ?? new NullLogger();
+        $this->client = $client ?? new CastClient($config->timeout, $config->connectTimeout);
+        $this->logger = $logger === null ? new NullLogger() : new InterpolatingLogger($logger);
     }
 
     public function config(): S5wConfig
@@ -155,14 +154,33 @@ final class HttpClient
 
     /**
      * Sends and returns the raw response if the status is a success; otherwise throws.
+     *
+     * Logs one debug line per request — `S5W GET v1/check → 200 (21 ms)` — never headers,
+     * so the key stays out. Failures are not logged as errors here: they are thrown, and
+     * the caller decides.
      */
     public function send(CastRequest $request, string $method, string $path): CastResponse
     {
+        $started = hrtime(true);
+
         try {
             $response = $request->send($this->client);
         } catch (CastException $e) {
+            $this->logger->debug('S5W {method} {path} → failed ({ms} ms): {error}', [
+                'method' => $method,
+                'path' => rawurldecode($path),
+                'ms' => self::elapsed($started),
+                'error' => $e->getMessage(),
+            ]);
             throw new TransportException("S5W {$path}: {$e->getMessage()}", (int) $e->getCode(), $e);
         }
+
+        $this->logger->debug('S5W {method} {path} → {status} ({ms} ms)', [
+            'method' => $method,
+            'path' => rawurldecode($path),
+            'status' => $response->statusCode,
+            'ms' => self::elapsed($started),
+        ]);
 
         if ($response->isSuccess()) {
             return $response;
@@ -205,19 +223,9 @@ final class HttpClient
         return $errors;
     }
 
-    private static function defaultClient(S5wConfig $config, ?LoggerInterface $logger): CastClient
+    /** Milliseconds since an `hrtime(true)` mark. */
+    private static function elapsed(int|float $started): int
     {
-        $client = new CastClient($config->timeout, $config->connectTimeout);
-        if ($logger !== null) {
-            // Logs method, URL, status and timing — never headers, so the key stays out.
-            $client->addMiddleware(new LoggingMiddleware(
-                logger: $logger,
-                requestLevel: LogLevel::DEBUG,
-                responseLevel: LogLevel::DEBUG,
-                errorLevel: LogLevel::WARNING,
-            ));
-        }
-
-        return $client;
+        return (int) round((hrtime(true) - $started) / 1_000_000);
     }
 }
