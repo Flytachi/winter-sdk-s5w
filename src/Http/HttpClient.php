@@ -17,6 +17,7 @@ use Flytachi\Winter\SDK\S5w\S5wConfig;
 use Flytachi\Winter\SDK\S5w\Support\Payload;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
+use Psr\Log\NullLogger;
 
 /**
  * The one place that talks HTTP: base URL, the key, timeouts, retries, logging,
@@ -32,9 +33,13 @@ final class HttpClient
 
     private readonly CastClient $client;
 
+    private readonly LoggerInterface $logger;
+
     /**
-     * @param CastClient|null $client Bring your own to add middleware or cURL defaults.
-     *                                Logging is added only to the client the SDK builds itself.
+     * @param CastClient|null      $client Bring your own to add middleware or cURL defaults.
+     *                                     HTTP request logging is added only to the client the
+     *                                     SDK builds itself; the SDK's own events are logged either way.
+     * @param LoggerInterface|null $logger null — nothing is logged
      */
     public function __construct(
         private readonly S5wConfig $config,
@@ -42,11 +47,18 @@ final class HttpClient
         ?LoggerInterface $logger = null,
     ) {
         $this->client = $client ?? self::defaultClient($config, $logger);
+        $this->logger = $logger ?? new NullLogger();
     }
 
     public function config(): S5wConfig
     {
         return $this->config;
+    }
+
+    /** For the SDK's own events (an upload started, a chunk retried); a no-op without a logger. */
+    public function logger(): LoggerInterface
+    {
+        return $this->logger;
     }
 
     /** Absolute URL of a path on the instance. */

@@ -27,7 +27,7 @@ use Flytachi\Winter\SDK\S5w\Support\Source;
  * by itself for large files; call it directly for progress or to keep the session id:
  * ```
  * $file = $s5w->uploads()->send('/videos/talk.mp4', folder: 'videos',
- *     onStart: fn(UploadSession $s) => $jobs->remember($s->id),
+ *     onStart: fn(UploadSession $session) => $jobs->remember($session->id),
  *     onProgress: fn(int $sent, int $total) => printf("%d%%\n", $sent * 100 / $total),
  * );
  * $file = $s5w->uploads()->resume($savedId, '/videos/talk.mp4');   // after a restart
@@ -167,14 +167,29 @@ final readonly class Uploads
      * holds is not sent at all. A failed chunk is retried {@see ATTEMPTS} times, each
      * time asking the server where it stands first, so nothing is sent twice or lost.
      *
-     * @param string|\SplFileInfo $file
+     * ```
+     * $file = $s5w->uploads()->send('/videos/talk.mp4', folder: 'videos',
+     *     onStart: fn(UploadSession $session) => $job->saveSessionId($session->id),
+     *     onProgress: fn(int $sent, int $total) => $bar->set($sent / $total),
+     * );
+     * ```
+     *
+     * With a logger given to `S5w`, the start, retries, recovery and the end are logged
+     * (retries as warnings) — whether or not callbacks are passed.
+     *
+     * @param string|\SplFileInfo $file a readable file
+     * @param string|null $folder      folder name; null — the bucket root
      * @param string|null $name        stored name; null — the file's own name
      * @param bool        $deduplicate hash locally and skip the transfer for known content.
      *                                 Not done with image options (see {@see start()}).
-     * @param (callable(UploadSession): void)|null $onStart   right after the session opens —
-     *                                 save `$session->id` here to {@see resume()} after a restart
-     * @param (callable(int, int): void)|null      $onProgress `(bytesOnServer, totalBytes)`,
-     *                                 after every chunk
+     * @param (callable(UploadSession $session): void)|null $onStart
+     *        Once, right after the session opens — before any byte is sent. Save
+     *        `$session->id` here to {@see resume()} the upload after a restart.
+     *        Not called when the content was deduplicated (there is no session).
+     * @param (callable(int $sent, int $total): void)|null $onProgress
+     *        After every chunk the server confirmed: `$sent` bytes of `$total` are on the
+     *        server. Also called once at the start (`$sent` = 0, or where a resume begins)
+     *        and once with `$sent === $total` when the content was deduplicated.
      *
      * @throws UploadInterruptedException retries ran out; the session is kept for {@see resume()}
      * @throws UploadUnconfirmedException the last answer was lost; the file may exist
@@ -203,9 +218,11 @@ final readonly class Uploads
     /**
      * {@see send()} for bytes held in memory.
      *
-     * @param string $name stored name, with the extension
-     * @param (callable(UploadSession): void)|null $onStart
-     * @param (callable(int, int): void)|null      $onProgress
+     * @param string      $content the bytes
+     * @param string      $name    stored name, with the extension
+     * @param string|null $folder  folder name; null — the bucket root
+     * @param (callable(UploadSession $session): void)|null $onStart    as in {@see send()}
+     * @param (callable(int $sent, int $total): void)|null  $onProgress as in {@see send()}
      */
     public function sendContent(
         string $content,
@@ -232,8 +249,17 @@ final readonly class Uploads
      * a restart with an id saved in `onStart`. Asks the server where it stopped and
      * sends the rest of the same file.
      *
+     * ```
+     * catch (UploadInterruptedException $e) {
+     *     $file = $s5w->uploads()->resume($e->sessionId(), $path,
+     *         onProgress: fn(int $sent, int $total) => $bar->set($sent / $total));
+     * }
+     * ```
+     *
      * @param string|UploadSession $session the session or its id
-     * @param (callable(int, int): void)|null $onProgress
+     * @param string|\SplFileInfo  $file    the same file the session was started with
+     * @param (callable(int $sent, int $total): void)|null $onProgress as in {@see send()};
+     *        the first call reports where the upload resumes
      *
      * @throws NotFoundException the session is gone (completed, aborted, expired): start over
      * @throws S5wException      the file is not the size the session was started with
@@ -254,11 +280,20 @@ final readonly class Uploads
             ));
         }
 
+        $this->http->logger()->debug('S5W upload {id} resumed at {offset} of {size} bytes', [
+            'id' => $current->id,
+            'offset' => $current->offset,
+            'size' => $current->size,
+        ]);
+
         return $this->pump($current, $source, $onProgress);
     }
 
     /**
      * @internal The shared path of {@see send()}, {@see sendContent()} and `files()->upload()`.
+     *
+     * @param (callable(UploadSession $session): void)|null $onStart
+     * @param (callable(int $sent, int $total): void)|null  $onProgress
      */
     public function sendSource(
         Source $source,
@@ -270,17 +305,29 @@ final readonly class Uploads
         ?callable $onProgress = null,
     ): File {
         // With image options the server stores the processed result, so a hash of the
-        // original says nothing — and when it does match, the server would attach the
-        // unprocessed original and skip the options. Only hash plain uploads.
+        // original says nothing — and when it does match, an older server attaches the
+        // unprocessed original and skips the options. Only hash plain uploads.
         $hash = $deduplicate && ($imageOptions === null || $imageOptions->isEmpty()) ? $source->sha256() : null;
 
         $session = $this->start($name ?? $source->name, $source->size, $folder, $hash, $imageOptions);
         if ($session->file !== null) {
+            $this->http->logger()->debug('S5W upload deduplicated: {name} ({size} bytes) → file {file}, nothing sent', [
+                'name' => $session->name,
+                'size' => $session->size,
+                'file' => $session->file->id,
+            ]);
             if ($onProgress !== null) {
                 $onProgress($session->size, $session->size);
             }
             return $session->file;
         }
+
+        $this->http->logger()->debug('S5W upload {id} started: {name}, {size} bytes in chunks of {chunk}', [
+            'id' => $session->id,
+            'name' => $session->name,
+            'size' => $session->size,
+            'chunk' => $session->chunkSize,
+        ]);
 
         if ($onStart !== null) {
             $onStart($session);
@@ -289,7 +336,11 @@ final readonly class Uploads
         return $this->pump($session, $source, $onProgress);
     }
 
-    /** Send what is left, then complete. */
+    /**
+     * Send what is left, then complete.
+     *
+     * @param (callable(int $sent, int $total): void)|null $onProgress
+     */
     private function pump(UploadSession $session, Source $source, ?callable $onProgress): File
     {
         $reported = $session->offset;
@@ -315,6 +366,11 @@ final readonly class Uploads
                 $session = $this->recover($session, $e, ++$failures);
             } catch (ApiException $e) {
                 // The data itself is refused (too large, too small, session gone): no retry helps.
+                $this->http->logger()->error('S5W upload {id} refused at {offset}: {error}', [
+                    'id' => $session->id,
+                    'offset' => $session->offset,
+                    'error' => $e->getMessage(),
+                ]);
                 $this->abortQuietly($session);
                 throw $e;
             }
@@ -340,38 +396,96 @@ final readonly class Uploads
      */
     private function recover(UploadSession $session, S5wException $cause, int $failures): UploadSession
     {
+        $log = $this->http->logger();
+
         if ($failures >= self::ATTEMPTS) {
+            $log->error('S5W upload {id} interrupted at {offset} of {size} after {attempts} attempts: {error}', [
+                'id' => $session->id,
+                'offset' => $session->offset,
+                'size' => $session->size,
+                'attempts' => $failures,
+                'error' => $cause->getMessage(),
+            ]);
             throw new UploadInterruptedException($session->id, $session->offset, $session->size, $cause);
         }
 
-        usleep(self::BACKOFF_MS * (2 ** ($failures - 1)) * 1000);
+        $delay = self::BACKOFF_MS * (2 ** ($failures - 1));
+        $log->warning('S5W upload {id}: chunk at {offset} failed (attempt {attempt}/{attempts}), '
+            . 'retry in {delay} ms: {error}', [
+            'id' => $session->id,
+            'offset' => $session->offset,
+            'attempt' => $failures,
+            'attempts' => self::ATTEMPTS,
+            'delay' => $delay,
+            'error' => $cause->getMessage(),
+        ]);
+        usleep($delay * 1000);
 
         try {
-            return $this->status($session);
+            $current = $this->status($session);
         } catch (TransportException | ServerException) {
             return $session; // still unreachable: the next attempt will tell
         }
+
+        $log->debug('S5W upload {id}: the server holds {offset} of {size} bytes, continuing', [
+            'id' => $current->id,
+            'offset' => $current->offset,
+            'size' => $current->size,
+        ]);
+
+        return $current;
     }
 
     private function finish(UploadSession $session): File
     {
+        $log = $this->http->logger();
+
         for ($failures = 1;; $failures++) {
             try {
-                return $this->complete($session);
+                $file = $this->complete($session);
+                $log->debug('S5W upload {id} completed: {name} → file {file}', [
+                    'id' => $session->id,
+                    'name' => $file->name,
+                    'file' => $file->id,
+                ]);
+
+                return $file;
             } catch (TransportException | ServerException $e) {
                 // Did it complete? A live session says no; a gone one says "maybe".
                 try {
                     $this->status($session);
                 } catch (NotFoundException) {
+                    $log->error('S5W upload {id} completed but not confirmed: {error}', [
+                        'id' => $session->id,
+                        'error' => $e->getMessage(),
+                    ]);
                     throw new UploadUnconfirmedException($session->id, $session->name, $e);
                 } catch (TransportException | ServerException) {
                     // unknown yet — count it as a failure and try again
                 }
                 if ($failures >= self::ATTEMPTS) {
+                    $log->error('S5W upload {id}: completing failed after {attempts} attempts: {error}', [
+                        'id' => $session->id,
+                        'attempts' => $failures,
+                        'error' => $e->getMessage(),
+                    ]);
                     throw new UploadInterruptedException($session->id, $session->offset, $session->size, $e);
                 }
-                usleep(self::BACKOFF_MS * (2 ** ($failures - 1)) * 1000);
+                $delay = self::BACKOFF_MS * (2 ** ($failures - 1));
+                $log->warning('S5W upload {id}: completing failed (attempt {attempt}/{attempts}), '
+                    . 'retry in {delay} ms: {error}', [
+                    'id' => $session->id,
+                    'attempt' => $failures,
+                    'attempts' => self::ATTEMPTS,
+                    'delay' => $delay,
+                    'error' => $e->getMessage(),
+                ]);
+                usleep($delay * 1000);
             } catch (ApiException $e) {
+                $log->error('S5W upload {id}: completing refused: {error}', [
+                    'id' => $session->id,
+                    'error' => $e->getMessage(),
+                ]);
                 $this->abortQuietly($session);
                 throw $e;
             }
