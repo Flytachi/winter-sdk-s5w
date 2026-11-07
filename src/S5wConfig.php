@@ -31,7 +31,7 @@ final readonly class S5wConfig
      * @param int    $transferTimeout Seconds for a call that moves file bytes (upload, download).
      * @param int    $chunkThreshold  Files larger than this are uploaded in chunks (resumable)
      *                                instead of one request. At most {@see Api\Files::SINGLE_REQUEST_LIMIT}.
-     * @param string|null $userAgent  Overrides the default `winter-sdk-s5w` User-Agent.
+     * @param string|null $userAgent  Replaces the default `WinterSDK/{version}`.
      */
     public function __construct(
         string $baseUrl,

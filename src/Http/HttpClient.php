@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\SDK\S5w\Http;
 
+use Composer\InstalledVersions;
 use Flytachi\Winter\Cast\Common\CastClient;
 use Flytachi\Winter\Cast\Common\CastHeader;
 use Flytachi\Winter\Cast\Common\CastRequest;
@@ -28,7 +29,10 @@ use Psr\Log\NullLogger;
  */
 final class HttpClient
 {
-    public const string VERSION = '0.1.0';
+    private const string PACKAGE = 'flytachi/winter-sdk-s5w';
+
+    /** Built once per process: `WinterSDK/1.0.0`. */
+    private static ?string $userAgent = null;
 
     private readonly CastClient $client;
 
@@ -116,7 +120,7 @@ final class HttpClient
         $head = CastHeader::instance()
             ->authBearer($this->config->apiKey)
             ->set('Accept', 'application/json')
-            ->userAgent($this->config->userAgent ?? 'winter-sdk-s5w/' . self::VERSION);
+            ->userAgent($this->config->userAgent ?? self::userAgent());
         foreach ($headers as $key => $value) {
             $head->set($key, $value);
         }
@@ -221,6 +225,22 @@ final class HttpClient
         }
 
         return $errors;
+    }
+
+    /**
+     * The default User-Agent, `WinterSDK/{version}`. The version comes from Composer:
+     * the installed tag, `dev-main` for a path repository.
+     */
+    private static function userAgent(): string
+    {
+        if (self::$userAgent !== null) {
+            return self::$userAgent;
+        }
+
+        $version = class_exists(InstalledVersions::class) && InstalledVersions::isInstalled(self::PACKAGE)
+            ? (InstalledVersions::getPrettyVersion(self::PACKAGE) ?? 'dev')
+            : 'dev';
+        return self::$userAgent = "WinterSDK/{$version}";
     }
 
     /** Milliseconds since an `hrtime(true)` mark. */
