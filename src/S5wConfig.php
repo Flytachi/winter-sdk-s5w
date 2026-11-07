@@ -29,6 +29,8 @@ final readonly class S5wConfig
      *                                1 = no retry. Never applied to uploads: a retried upload
      *                                whose first attempt did land would store the file twice.
      * @param int    $transferTimeout Seconds for a call that moves file bytes (upload, download).
+     * @param int    $chunkThreshold  Files larger than this are uploaded in chunks (resumable)
+     *                                instead of one request. At most {@see Api\Files::SINGLE_REQUEST_LIMIT}.
      * @param string|null $userAgent  Overrides the default `winter-sdk-s5w` User-Agent.
      */
     public function __construct(
@@ -38,6 +40,7 @@ final readonly class S5wConfig
         public int $connectTimeout = 5,
         public int $retries = 1,
         public int $transferTimeout = 300,
+        public int $chunkThreshold = 16 * 1024 * 1024,
         public ?string $userAgent = null,
     ) {
         $baseUrl = rtrim(trim($baseUrl), '/');
@@ -52,6 +55,11 @@ final readonly class S5wConfig
         if ($timeout < 1 || $connectTimeout < 1 || $retries < 1 || $transferTimeout < 1) {
             throw new S5wException('S5W: timeouts and retries must be positive');
         }
+        if ($chunkThreshold < 1 || $chunkThreshold > Api\Files::SINGLE_REQUEST_LIMIT) {
+            throw new S5wException(
+                'S5W: chunkThreshold must be between 1 and ' . Api\Files::SINGLE_REQUEST_LIMIT . ' bytes',
+            );
+        }
 
         $this->baseUrl = $baseUrl;
         $this->apiKey = $apiKey;
@@ -65,6 +73,11 @@ final readonly class S5wConfig
     public function withTransferTimeout(int $seconds): self
     {
         return $this->copy(transferTimeout: $seconds);
+    }
+
+    public function withChunkThreshold(int $bytes): self
+    {
+        return $this->copy(chunkThreshold: $bytes);
     }
 
     public function withRetries(int $attempts): self
@@ -87,6 +100,7 @@ final readonly class S5wConfig
             'connectTimeout' => $this->connectTimeout,
             'retries' => $this->retries,
             'transferTimeout' => $this->transferTimeout,
+            'chunkThreshold' => $this->chunkThreshold,
             'userAgent' => $this->userAgent,
         ];
     }
@@ -96,6 +110,7 @@ final readonly class S5wConfig
         ?int $connectTimeout = null,
         ?int $retries = null,
         ?int $transferTimeout = null,
+        ?int $chunkThreshold = null,
         ?string $userAgent = null,
     ): self {
         return new self(
@@ -105,6 +120,7 @@ final readonly class S5wConfig
             $connectTimeout ?? $this->connectTimeout,
             $retries ?? $this->retries,
             $transferTimeout ?? $this->transferTimeout,
+            $chunkThreshold ?? $this->chunkThreshold,
             $userAgent ?? $this->userAgent,
         );
     }

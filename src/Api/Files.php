@@ -9,7 +9,7 @@ use Flytachi\Winter\SDK\S5w\Exception\PayloadTooLargeException;
 use Flytachi\Winter\SDK\S5w\Exception\ValidationException;
 use Flytachi\Winter\SDK\S5w\Http\HttpClient;
 use Flytachi\Winter\SDK\S5w\Option\ImageOptions;
-use Flytachi\Winter\SDK\S5w\S5wException;
+use Flytachi\Winter\SDK\S5w\Support\Source;
 
 /**
  * `/v1/files` — the files of the bucket. Needs a FULL key.
@@ -33,12 +33,19 @@ final readonly class Files
     public const int SINGLE_REQUEST_LIMIT = 32 * 1024 * 1024 - 64 * 1024;
 
     /** @internal Reach it through {@see \Flytachi\Winter\SDK\S5w\S5w::files()}. */
-    public function __construct(private HttpClient $http)
-    {
+    public function __construct(
+        private HttpClient $http,
+        private Uploads $uploads,
+    ) {
     }
 
     /**
      * Upload a file from disk.
+     *
+     * Picks the way by size: up to {@see \Flytachi\Winter\SDK\S5w\S5wConfig::$chunkThreshold}
+     * (16 MiB by default) in one request; larger in chunks through
+     * {@see Uploads::send()} — resumable, retried, deduplicated by hash. For progress
+     * or the session id, call `uploads()->send()` yourself.
      *
      * @param string|\SplFileInfo $file   path to a readable file
      * @param string|null         $folder folder name; null — the bucket root
@@ -58,13 +65,12 @@ final readonly class Files
         ?string $name = null,
         ?ImageOptions $imageOptions = null,
     ): File {
-        $path = $file instanceof \SplFileInfo ? $file->getPathname() : $file;
-        if (!is_file($path) || !is_readable($path)) {
-            throw new S5wException("S5W: cannot read the file '{$path}'");
+        $source = Source::path($file);
+        if ($source->size > $this->http->config()->chunkThreshold) {
+            return $this->uploads->sendSource($source, $folder, $name, $imageOptions);
         }
 
-        $size = (int) filesize($path);
-        self::assertSingleRequest($size);
+        $path = (string) $source->pathname();
 
         return $this->send(new \CURLFile($path, '', basename($path)), $folder, $name, $imageOptions);
     }
@@ -84,7 +90,9 @@ final readonly class Files
         ?string $folder = null,
         ?ImageOptions $imageOptions = null,
     ): File {
-        self::assertSingleRequest(strlen($content));
+        if (strlen($content) > $this->http->config()->chunkThreshold) {
+            return $this->uploads->sendSource(Source::content($content, $name), $folder, $name, $imageOptions);
+        }
 
         return $this->send(new \CURLStringFile($content, $name), $folder, null, $imageOptions);
     }
@@ -109,18 +117,5 @@ final readonly class Files
         $request = $this->http->transferRequest('POST', self::PATH)->withMultipartBody($fields);
 
         return File::fromPayload($this->http->sendJson($request, 'POST', self::PATH));
-    }
-
-    private static function assertSingleRequest(int $size): void
-    {
-        if ($size > self::SINGLE_REQUEST_LIMIT) {
-            // Larger files go through the chunked upload (/v1/uploads); upload() will
-            // switch to it by itself once it is in the SDK.
-            throw new S5wException(sprintf(
-                'S5W: %d bytes is over the single-request limit of %d; the chunked upload is not in the SDK yet',
-                $size,
-                self::SINGLE_REQUEST_LIMIT,
-            ));
-        }
     }
 }

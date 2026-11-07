@@ -85,8 +85,9 @@ final class HttpClient
      * for the calls that need to shape the body themselves (multipart, raw bytes).
      *
      * @param array<string, scalar|null> $query
+     * @param array<string, string>      $headers extra headers on top of the SDK's own
      */
-    public function request(string $method, string $path, array $query = []): CastRequest
+    public function request(string $method, string $path, array $query = [], array $headers = []): CastRequest
     {
         $query = array_filter($query, static fn($v) => $v !== null && $v !== '');
         $url = $this->url($path);
@@ -101,13 +102,16 @@ final class HttpClient
             default => throw new \InvalidArgumentException("Unsupported HTTP method {$method}"),
         };
 
+        $head = CastHeader::instance()
+            ->authBearer($this->config->apiKey)
+            ->set('Accept', 'application/json')
+            ->userAgent($this->config->userAgent ?? 'winter-sdk-s5w/' . self::VERSION);
+        foreach ($headers as $key => $value) {
+            $head->set($key, $value);
+        }
+
         return $request
-            ->withHeaders(
-                CastHeader::instance()
-                    ->authBearer($this->config->apiKey)
-                    ->set('Accept', 'application/json')
-                    ->userAgent($this->config->userAgent ?? 'winter-sdk-s5w/' . self::VERSION)
-            )
+            ->withHeaders($head)
             ->timeout($this->config->timeout)
             ->connectTimeout($this->config->connectTimeout)
             ->retry($this->config->retries);
@@ -118,10 +122,15 @@ final class HttpClient
      * no retries — a retried upload whose first attempt did land stores the file twice.
      *
      * @param array<string, scalar|null> $query
+     * @param array<string, string>      $headers
      */
-    public function transferRequest(string $method, string $path, array $query = []): CastRequest
-    {
-        return $this->request($method, $path, $query)
+    public function transferRequest(
+        string $method,
+        string $path,
+        array $query = [],
+        array $headers = [],
+    ): CastRequest {
+        return $this->request($method, $path, $query, $headers)
             ->timeout($this->config->transferTimeout)
             ->retry(1);
     }
