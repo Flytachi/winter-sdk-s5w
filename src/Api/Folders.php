@@ -111,11 +111,20 @@ final readonly class Folders
     }
 
     /**
-     * {@see create()} if there is no such folder yet, otherwise the existing one
-     * as it is — its settings are not touched.
+     * The existing folder as it is — its settings are not touched — or a new one
+     * {@see create()}d with these settings.
+     *
+     * Looks first, since the folder usually exists: one request in the common case,
+     * and no 409 in the logs. A 409 from the create still means "someone created it
+     * between our two requests", so it falls back to reading it.
      */
     public function ensure(string $name, bool $public = false, Retention $retention = Retention::NONE): Folder
     {
+        $folder = $this->find($name);
+        if ($folder !== null) {
+            return $folder;
+        }
+
         try {
             return $this->create($name, $public, $retention);
         } catch (ConflictException) {
