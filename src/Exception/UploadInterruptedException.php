@@ -17,6 +17,8 @@ use Flytachi\Winter\SDK\S5w\S5wException;
  * }
  * ```
  * The cause is in {@see getPrevious()}.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/exceptions#uploadinterruptedexception UploadInterruptedException
  */
 class UploadInterruptedException extends S5wException
 {
@@ -39,18 +41,29 @@ class UploadInterruptedException extends S5wException
         );
     }
 
-    /** Pass it to `uploads()->resume()`. */
+    /**
+     * Pass it to `uploads()->resume()`.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/exceptions#uploadinterruptedexception UploadInterruptedException
+     */
     public function sessionId(): string
     {
         return $this->sessionId;
     }
 
-    /** Bytes the server holds, as far as the SDK knows. */
+    /**
+     * Bytes the server holds, as far as the SDK knows.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/exceptions#uploadinterruptedexception UploadInterruptedException
+     */
     public function offset(): int
     {
         return $this->offset;
     }
 
+    /**
+     * @link https://winterframe.net/packages/sdk-s5w/exceptions#uploadinterruptedexception UploadInterruptedException
+     */
     public function size(): int
     {
         return $this->size;

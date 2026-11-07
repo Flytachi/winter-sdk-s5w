@@ -11,6 +11,8 @@ use Flytachi\Winter\SDK\S5w\S5wException;
  *
  * Branch on the class (or {@see status()}), never on the message: the message is
  * for logs. {@see from()} picks the subclass by status.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/exceptions#apiexception ApiException
  */
 class ApiException extends S5wException
 {
@@ -30,6 +32,7 @@ class ApiException extends S5wException
 
     /**
      * @param array<string, list<string>> $errors
+     * @link https://winterframe.net/packages/sdk-s5w/exceptions#apiexception ApiException
      */
     public static function from(
         int $status,
@@ -56,7 +59,11 @@ class ApiException extends S5wException
         return new $class($status, $text, $errors, $method, $path, $previous);
     }
 
-    /** HTTP status code. */
+    /**
+     * HTTP status code.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/exceptions#apiexception ApiException
+     */
     public function status(): int
     {
         return $this->status;
@@ -66,19 +73,28 @@ class ApiException extends S5wException
      * Per-field validation messages; empty unless this is a 422.
      *
      * @return array<string, list<string>>
+     * @link https://winterframe.net/packages/sdk-s5w/exceptions#apiexception ApiException
      */
     public function errors(): array
     {
         return $this->errors;
     }
 
-    /** The request that failed: HTTP method. */
+    /**
+     * The request that failed: HTTP method.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/exceptions#apiexception ApiException
+     */
     public function method(): string
     {
         return $this->method;
     }
 
-    /** The request that failed: path relative to the base URL. */
+    /**
+     * The request that failed: path relative to the base URL.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/exceptions#apiexception ApiException
+     */
     public function path(): string
     {
         return $this->path;

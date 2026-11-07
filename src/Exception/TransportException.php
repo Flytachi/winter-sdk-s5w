@@ -10,9 +10,12 @@ use Flytachi\Winter\SDK\S5w\S5wException;
  * The request never got an HTTP answer: DNS failure, connection refused, timeout.
  *
  * The one failure that is worth retrying later as it is.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/exceptions#transportexception TransportException
  */
 class TransportException extends S5wException
 {
+    /** @link https://winterframe.net/packages/sdk-s5w/exceptions#transportexception TransportException */
     public function isTimeout(): bool
     {
         return $this->getPrevious() instanceof \Flytachi\Winter\Cast\Exception\TimeoutException;

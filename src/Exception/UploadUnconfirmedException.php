@@ -13,6 +13,8 @@ use Flytachi\Winter\SDK\S5w\S5wException;
  *
  * The SDK does not guess (searching by name could pick someone else's file).
  * Look the file up yourself, or upload again if a duplicate is acceptable.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/exceptions#uploadunconfirmedexception UploadUnconfirmedException
  */
 class UploadUnconfirmedException extends S5wException
 {
@@ -29,12 +31,19 @@ class UploadUnconfirmedException extends S5wException
         );
     }
 
+    /**
+     * @link https://winterframe.net/packages/sdk-s5w/exceptions#uploadunconfirmedexception UploadUnconfirmedException
+     */
     public function sessionId(): string
     {
         return $this->sessionId;
     }
 
-    /** The name the upload was started with (the stored one may differ, e.g. `name (1).ext`). */
+    /**
+     * The name the upload was started with (the stored one may differ, e.g. `name (1).ext`).
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/exceptions#uploadunconfirmedexception UploadUnconfirmedException
+     */
     public function name(): string
     {
         return $this->name;

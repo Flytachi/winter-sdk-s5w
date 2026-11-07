@@ -6,6 +6,8 @@ namespace Flytachi\Winter\SDK\S5w\Enum;
 
 /**
  * What an image is re-encoded into at upload. Mirrors the server's `ImageFormat`.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageformat ImageFormat
  */
 enum ImageFormat: string
 {
@@ -16,7 +18,11 @@ enum ImageFormat: string
     case PNG = 'PNG';
     case AVIF = 'AVIF';
 
-    /** null for ORIGINAL — the source decides. */
+    /**
+     * null for ORIGINAL — the source decides.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageformat ImageFormat
+     */
     public function mime(): ?string
     {
         return match ($this) {

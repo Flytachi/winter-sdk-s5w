@@ -20,6 +20,8 @@ namespace Flytachi\Winter\SDK\S5w;
  *     ├── ValidationException        422 — with per-field errors()
  *     └── ServerException            5xx
  * ```
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/exceptions Exceptions
  */
 class S5wException extends \RuntimeException
 {

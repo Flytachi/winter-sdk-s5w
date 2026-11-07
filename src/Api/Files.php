@@ -31,10 +31,13 @@ use Flytachi\Winter\SDK\S5w\Support\Source;
  * $s5w->files()->find($id);                                     // ?File
  * $s5w->files()->list(folder: 'docs', sort: FileSort::SIZE);     // Page<File>
  * $s5w->files()->rename($file, 'Q3 report.pdf');
- * $s5w->files()->move($file, 'archive');                        // or Folder::ROOT
+ * $s5w->files()->move($file, 'archive');                        // or Folder::ROOT for the root
+ * $s5w->files()->update($file, 'Q3-final.pdf', 'archive');       // both at once, one request
  * $s5w->files()->delete($file);
  * foreach ($s5w->files()->all(folder: Folder::ROOT) as $file) { … }
  * ```
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/api-reference#files Files
  */
 final readonly class Files
 {
@@ -64,13 +67,19 @@ final readonly class Files
      *                           answers the same way. An id that is not even shaped like
      *                           one ({@see File::isValidId()}) is the same answer, without
      *                           a request.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filesget Files::get()
      */
     public function get(string|File $id): File
     {
         return File::fromPayload($this->http->json('GET', self::path($id, 'GET')));
     }
 
-    /** {@see get()}, but `null` instead of a 404 (a malformed id included). */
+    /**
+     * {@see get()}, but `null` instead of a 404 (a malformed id included).
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filesfind-filesexists Files::find()
+     */
     public function find(string|File $id): ?File
     {
         try {
@@ -80,6 +89,7 @@ final readonly class Files
         }
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#filesfind-filesexists Files::exists() */
     public function exists(string|File $id): bool
     {
         return $this->find($id) !== null;
@@ -96,6 +106,7 @@ final readonly class Files
      * @return Page<File>
      *
      * @throws ValidationException no such folder
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#fileslist Files::list()
      */
     public function list(
         int $page = 1,
@@ -124,6 +135,7 @@ final readonly class Files
      * @return \Generator<int, File>
      *
      * @throws ValidationException no such folder
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filesall Files::all()
      */
     public function all(
         ?string $search = null,
@@ -151,6 +163,8 @@ final readonly class Files
      *
      * @throws NotFoundException no such file — already deleted, or never existed.
      *                           Deleting is not idempotent: on a retry, treat it as done.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filesdelete Files::delete()
      */
     public function delete(string|File $id): void
     {
@@ -168,6 +182,7 @@ final readonly class Files
      *
      * @throws NotFoundException no such file
      * @throws ConflictException a file with that name is already in the folder
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filesrename Files::rename()
      */
     public function rename(string|File $id, string $name): File
     {
@@ -184,17 +199,40 @@ final readonly class Files
      * private, and its retention is applied from the file's creation date. The bucket
      * root makes a file public. Reads the file first.
      *
-     * @param string|Folder|null $folder destination; null or {@see Folder::ROOT} — the root
+     * @param string|Folder $folder destination, required; {@see Folder::ROOT} (or `''`) — the root
      *
      * @throws NotFoundException   no such file
      * @throws ValidationException no such folder
      * @throws ConflictException   a file with that name is already in the destination
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filesmove Files::move()
      */
-    public function move(string|File $id, string|Folder|null $folder): File
+    public function move(string|File $id, string|Folder $folder): File
     {
         $current = $this->get($id);
 
         return $this->place($current, $current->name, Folder::nameOf($folder));
+    }
+
+    /**
+     * Set the name and the folder at once — one request, nothing read first. What you
+     * pass is what the file ends up with, so a concurrent change cannot be undone by
+     * a stale read ({@see rename()} and {@see move()} read the file first).
+     *
+     * Both are required on purpose, and the folder cannot be null: the root makes a file
+     * public, so moving there has to be spelled out — {@see Folder::ROOT} (or `''`).
+     * To keep the folder, use {@see rename()}.
+     *
+     * @param string        $name   1–255 characters, unique in the destination
+     * @param string|Folder $folder destination; {@see Folder::ROOT} (or `''`) — the root
+     *
+     * @throws NotFoundException   no such file
+     * @throws ValidationException no such folder
+     * @throws ConflictException   a file with that name is already in the destination
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filesupdate Files::update()
+     */
+    public function update(string|File $id, string $name, string|Folder $folder): File
+    {
+        return $this->place($id, $name, Folder::nameOf($folder));
     }
 
     // ── Uploading ────────────────────────────────────────────────────────────
@@ -218,6 +256,7 @@ final readonly class Files
      *
      * @throws ValidationException      no such folder, bad image options, image options on a non-image
      * @throws PayloadTooLargeException the bucket quota is full
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filesupload Files::upload()
      */
     public function upload(
         string|\SplFileInfo $file,
@@ -243,6 +282,7 @@ final readonly class Files
      *
      * @throws ValidationException      no such folder, bad image options, image options on a non-image
      * @throws PayloadTooLargeException the bucket quota is full
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filesuploadcontent Files::uploadContent()
      */
     public function uploadContent(
         string $content,
@@ -281,9 +321,9 @@ final readonly class Files
     }
 
     /** `PUT` replaces both: the name and the folder (null — the root). */
-    private function place(File $file, string $name, ?string $folder): File
+    private function place(string|File $id, string $name, ?string $folder): File
     {
-        $path = self::path($file, 'PUT');
+        $path = self::path($id, 'PUT');
 
         return File::fromPayload($this->http->json('PUT', $path, [
             'name' => $name,

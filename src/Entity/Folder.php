@@ -10,6 +10,8 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
 /**
  * A folder: one level, no nesting, addressed by its name (unique in the bucket).
  * Its settings apply to every file inside.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/entities#folder Folder
  */
 final readonly class Folder implements \JsonSerializable
 {

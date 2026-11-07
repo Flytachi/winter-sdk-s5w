@@ -11,6 +11,7 @@ use Flytachi\Winter\SDK\S5w\S5wException;
  * a file is never loaded whole, only one chunk at a time.
  *
  * @internal
+ * @link https://winterframe.net/packages/sdk-s5w/upload-pipeline Upload pipeline
  */
 final class Source
 {

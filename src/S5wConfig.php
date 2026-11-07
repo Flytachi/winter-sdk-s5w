@@ -14,6 +14,8 @@ namespace Flytachi\Winter\SDK\S5w;
  * $config = new S5wConfig('https://s5.example.com', 's5w_9f3c…');
  * $config = $config->withTimeout(30)->withRetries(3);
  * ```
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wconfig S5wConfig
  */
 final readonly class S5wConfig
 {
@@ -32,6 +34,7 @@ final readonly class S5wConfig
      * @param int    $chunkThreshold  Files larger than this are uploaded in chunks (resumable)
      *                                instead of one request. At most {@see Api\Files::SINGLE_REQUEST_LIMIT}.
      * @param string|null $userAgent  Replaces the default `WinterSDK/{version}`.
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wconfig__construct S5wConfig::__construct()
      */
     public function __construct(
         string $baseUrl,
@@ -65,26 +68,31 @@ final readonly class S5wConfig
         $this->apiKey = $apiKey;
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wconfigwith S5wConfig::with*() */
     public function withTimeout(int $seconds, ?int $connectSeconds = null): self
     {
         return $this->copy(timeout: $seconds, connectTimeout: $connectSeconds ?? $this->connectTimeout);
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wconfigwith S5wConfig::with*() */
     public function withTransferTimeout(int $seconds): self
     {
         return $this->copy(transferTimeout: $seconds);
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wconfigwith S5wConfig::with*() */
     public function withChunkThreshold(int $bytes): self
     {
         return $this->copy(chunkThreshold: $bytes);
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wconfigwith S5wConfig::with*() */
     public function withRetries(int $attempts): self
     {
         return $this->copy(retries: $attempts);
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wconfigwith S5wConfig::with*() */
     public function withUserAgent(string $userAgent): self
     {
         return $this->copy(userAgent: $userAgent);

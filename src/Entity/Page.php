@@ -16,6 +16,7 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
  *
  * @template T
  * @implements \IteratorAggregate<int, T>
+ * @link https://winterframe.net/packages/sdk-s5w/entities#page Page
  */
 final readonly class Page implements \IteratorAggregate, \Countable, \JsonSerializable
 {
@@ -57,22 +58,29 @@ final readonly class Page implements \IteratorAggregate, \Countable, \JsonSerial
         );
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/entities#page Page */
     public function hasNext(): bool
     {
         return $this->next !== null;
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/entities#page Page */
     public function isEmpty(): bool
     {
         return $this->items === [];
     }
 
-    /** @return \ArrayIterator<int, T> */
+    /**
+     * @return \ArrayIterator<int, T>
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/entities#page Page
+     */
     public function getIterator(): \ArrayIterator
     {
         return new \ArrayIterator($this->items);
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/entities#page Page */
     public function count(): int
     {
         return count($this->items);
@@ -85,6 +93,7 @@ final readonly class Page implements \IteratorAggregate, \Countable, \JsonSerial
      * @template R
      * @param callable(T): R $fn
      * @return self<R>
+     * @link https://winterframe.net/packages/sdk-s5w/entities#page Page
      */
     public function map(callable $fn): self
     {

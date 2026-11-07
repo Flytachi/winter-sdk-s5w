@@ -22,6 +22,8 @@ use Flytachi\Winter\SDK\S5w\Enum\ImageFormat;
  * ImageOptions::avif(quality: 50);
  * ImageOptions::original()->fit(maxWidth: 800); // keep the format, only shrink
  * ```
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageoptions ImageOptions
  */
 final readonly class ImageOptions
 {
@@ -38,44 +40,61 @@ final readonly class ImageOptions
     ) {
     }
 
-    /** Keep the source format; add {@see fit()} or {@see quality()} to do something. */
+    /**
+     * Keep the source format; add {@see fit()} or {@see quality()} to do something.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageoptions ImageOptions
+     */
     public static function original(): self
     {
         return new self();
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageoptions ImageOptions */
     public static function webp(?int $quality = null): self
     {
         return new self(ImageFormat::WEBP, $quality);
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageoptions ImageOptions */
     public static function jpeg(?int $quality = null): self
     {
         return new self(ImageFormat::JPEG, $quality);
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageoptions ImageOptions */
     public static function png(?int $quality = null): self
     {
         return new self(ImageFormat::PNG, $quality);
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageoptions ImageOptions */
     public static function avif(?int $quality = null): self
     {
         return new self(ImageFormat::AVIF, $quality);
     }
 
-    /** Fit inside this box. Never enlarges; a 320×200 source under 160×160 becomes 160×100. */
+    /**
+     * Fit inside this box. Never enlarges; a 320×200 source under 160×160 becomes 160×100.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageoptionsfit ImageOptions::fit()
+     */
     public function fit(?int $maxWidth, ?int $maxHeight = null): self
     {
         return new self($this->format, $this->quality, $maxWidth, $maxHeight);
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageoptionsquality ImageOptions::quality() */
     public function quality(int $quality): self
     {
         return new self($this->format, $quality, $this->maxWidth, $this->maxHeight);
     }
 
-    /** Whether these options ask for anything at all. */
+    /**
+     * Whether these options ask for anything at all.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/options-and-enums#imageoptionsisempty ImageOptions::isEmpty()
+     */
     public function isEmpty(): bool
     {
         return $this->format === ImageFormat::ORIGINAL

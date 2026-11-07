@@ -11,6 +11,8 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
  *
  * Immutable: each call answers with a new one carrying the server's current
  * {@see $offset}. Nothing is in the bucket until the session is completed.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/entities#uploadsession UploadSession
  */
 final readonly class UploadSession implements \JsonSerializable
 {
@@ -47,19 +49,31 @@ final readonly class UploadSession implements \JsonSerializable
         );
     }
 
-    /** The content was already in the bucket: the file is created, nothing to send. */
+    /**
+     * The content was already in the bucket: the file is created, nothing to send.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/entities#uploadsession UploadSession
+     */
     public function isDeduplicated(): bool
     {
         return $this->file !== null;
     }
 
-    /** Every byte is on the server — time to complete. */
+    /**
+     * Every byte is on the server — time to complete.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/entities#uploadsession UploadSession
+     */
     public function isComplete(): bool
     {
         return $this->offset >= $this->size;
     }
 
-    /** Bytes still to send. */
+    /**
+     * Bytes still to send.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/entities#uploadsession UploadSession
+     */
     public function remaining(): int
     {
         return max(0, $this->size - $this->offset);

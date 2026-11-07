@@ -45,6 +45,8 @@ use Flytachi\Winter\SDK\S5w\Support\Source;
  *
  * Chunks: 4–16 MiB (the last may be smaller), strictly in order. A session lives
  * 24 hours after its last chunk and does not count against the quota until completed.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/api-reference#uploads Uploads
  */
 final readonly class Uploads
 {
@@ -75,6 +77,7 @@ final readonly class Uploads
      *
      * @throws ValidationException      no such folder, bad image options
      * @throws PayloadTooLargeException the size does not fit in the quota
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#uploadsstart Uploads::start()
      */
     public function start(
         string $name,
@@ -107,6 +110,7 @@ final readonly class Uploads
      * @throws ConflictException        the chunk does not continue the upload — ask {@see status()}
      * @throws PayloadTooLargeException over 16 MiB, or past the declared size
      * @throws NotFoundException        the session is gone (completed, aborted, expired)
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#uploadsappend Uploads::append()
      */
     public function append(string|UploadSession $session, string $chunk, ?int $offset = null): UploadSession
     {
@@ -128,6 +132,7 @@ final readonly class Uploads
      * connection, ask this and continue from that number.
      *
      * @throws NotFoundException the session is gone: start a new one
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#uploadsstatus Uploads::status()
      */
     public function status(string|UploadSession $session): UploadSession
     {
@@ -140,6 +145,7 @@ final readonly class Uploads
      *
      * @throws ConflictException   bytes are missing — the session stays open, send the rest
      * @throws ValidationException the data does not match the declared `sha256`
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#uploadscomplete Uploads::complete()
      */
     public function complete(string|UploadSession $session): File
     {
@@ -154,6 +160,7 @@ final readonly class Uploads
      * is swept 24 hours after its last chunk; this frees the disk now.
      *
      * @throws NotFoundException already completed, aborted or swept
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#uploadsabort Uploads::abort()
      */
     public function abort(string|UploadSession $session): void
     {
@@ -196,6 +203,7 @@ final readonly class Uploads
      * @throws UploadInterruptedException retries ran out; the session is kept for {@see resume()}
      * @throws UploadUnconfirmedException the last answer was lost; the file may exist
      * @throws ApiException               refused (folder, quota, image options); the session is dropped
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#uploadssend Uploads::send()
      */
     public function send(
         string|\SplFileInfo $file,
@@ -225,6 +233,7 @@ final readonly class Uploads
      * @param string|Folder|null $folder folder name or entity; null — the bucket root
      * @param (callable(UploadSession $session): void)|null $onStart    as in {@see send()}
      * @param (callable(int $sent, int $total): void)|null  $onProgress as in {@see send()}
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#uploadssendcontent Uploads::sendContent()
      */
     public function sendContent(
         string $content,
@@ -265,6 +274,7 @@ final readonly class Uploads
      *
      * @throws NotFoundException the session is gone (completed, aborted, expired): start over
      * @throws S5wException      the file is not the size the session was started with
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#uploadsresume Uploads::resume()
      */
     public function resume(
         string|UploadSession $session,

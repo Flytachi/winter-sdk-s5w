@@ -8,6 +8,8 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
 
 /**
  * A file in the bucket, addressed by its {@see $id}.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/entities#file File
  */
 final readonly class File implements \JsonSerializable
 {
@@ -45,6 +47,8 @@ final readonly class File implements \JsonSerializable
     /**
      * Whether `$id` has the shape of a file id. Says nothing about whether such a
      * file exists — handy to reject a malformed id from a URL before any request.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/entities#fileid_pattern-fileisvalidid File::isValidId()
      */
     public static function isValidId(string $id): bool
     {

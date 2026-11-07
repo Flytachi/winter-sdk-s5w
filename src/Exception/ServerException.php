@@ -6,6 +6,8 @@ namespace Flytachi\Winter\SDK\S5w\Exception;
 
 /**
  * 5xx — the service failed on its side; worth retrying later.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/exceptions#apiexception ApiException
  */
 class ServerException extends ApiException
 {

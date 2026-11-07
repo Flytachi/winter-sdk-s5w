@@ -6,6 +6,8 @@ namespace Flytachi\Winter\SDK\S5w\Enum;
 
 /**
  * What a file list is ordered by.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/options-and-enums#filesort FileSort
  */
 enum FileSort: string
 {

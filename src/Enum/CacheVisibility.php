@@ -7,6 +7,8 @@ namespace Flytachi\Winter\SDK\S5w\Enum;
 /**
  * Who may cache a delivered file — the directive of its `Cache-Control`.
  * Mirrors the server's `CacheVisibility`.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/options-and-enums#cachevisibility CacheVisibility
  */
 enum CacheVisibility: int
 {
@@ -19,6 +21,7 @@ enum CacheVisibility: int
     /** `no-store` — nobody stores it. */
     case NO_STORE = 3;
 
+    /** @link https://winterframe.net/packages/sdk-s5w/options-and-enums#cachevisibility CacheVisibility */
     public function directive(): string
     {
         return match ($this) {

@@ -16,6 +16,7 @@ use Psr\Log\LoggerInterface;
  * loggers that index it.
  *
  * @internal
+ * @link https://winterframe.net/packages/sdk-s5w/http-and-logging HTTP and logging
  */
 final class InterpolatingLogger extends AbstractLogger
 {

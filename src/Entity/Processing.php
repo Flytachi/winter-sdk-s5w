@@ -12,6 +12,8 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
  * Not applied is not an error; {@see $reason} says why: `no options`,
  * `animated` (animated images are kept as they are), `nothing to do`
  * (already within the limits and the format), `output is larger than source`.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/entities#processing Processing
  */
 final readonly class Processing implements \JsonSerializable
 {
@@ -43,7 +45,11 @@ final readonly class Processing implements \JsonSerializable
         );
     }
 
-    /** Bytes saved by processing; negative if the result grew. 0 when not applied. */
+    /**
+     * Bytes saved by processing; negative if the result grew. 0 when not applied.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/entities#processing Processing
+     */
     public function saved(): int
     {
         return $this->source !== null && $this->result !== null

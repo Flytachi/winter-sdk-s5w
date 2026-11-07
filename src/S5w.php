@@ -30,6 +30,8 @@ use Psr\Log\LoggerInterface;
  *
  * The API groups hang off it as resources, created on first use:
  * `folders()`, `files()`, `uploads()`; `links()` is coming next.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5w S5w
  */
 final class S5w
 {
@@ -46,6 +48,8 @@ final class S5w
      * @param LoggerInterface|null $logger One debug line per request (method, path, status, time)
      *                                     and the SDK's own events (uploads: start, retries, end).
      *                                     Never the key.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5w__construct S5w::__construct()
      */
     public function __construct(
         S5wConfig $config,
@@ -55,30 +59,47 @@ final class S5w
         $this->http = new HttpClient($config, $client, $logger);
     }
 
-    /** Shortcut for the common case. */
+    /**
+     * Shortcut for the common case.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wconnect S5w::connect()
+     */
     public static function connect(string $baseUrl, string $apiKey, ?LoggerInterface $logger = null): self
     {
         return new self(new S5wConfig($baseUrl, $apiKey), logger: $logger);
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#s5w S5w */
     public function config(): S5wConfig
     {
         return $this->http->config();
     }
 
-    /** `/v1/folders` — needs a FULL key. */
+    /**
+     * `/v1/folders` — needs a FULL key.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wfolders-s5wfiles-s5wuploads S5w::folders()
+     */
     public function folders(): Folders
     {
         return $this->folders ??= new Folders($this->http);
     }
 
-    /** `/v1/files` — needs a FULL key. */
+    /**
+     * `/v1/files` — needs a FULL key.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wfolders-s5wfiles-s5wuploads S5w::files()
+     */
     public function files(): Files
     {
         return $this->files ??= new Files($this->http, $this->uploads());
     }
 
-    /** `/v1/uploads` — chunked, resumable uploads; needs a FULL key. */
+    /**
+     * `/v1/uploads` — chunked, resumable uploads; needs a FULL key.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wfolders-s5wfiles-s5wuploads S5w::uploads()
+     */
     public function uploads(): Uploads
     {
         return $this->uploads ??= new Uploads($this->http);
@@ -94,6 +115,7 @@ final class S5w
      * @throws Exception\UnauthorizedException the key is unknown
      * @throws Exception\ForbiddenException    the key is disabled or expired
      * @throws TransportException              the service was not reached
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wcheck S5w::check()
      */
     public function check(): KeyInfo
     {
@@ -104,6 +126,8 @@ final class S5w
      * {@see check()} without the exception: true when the key works.
      *
      * A transport failure still throws — "can't tell" is not "no".
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wisvalid S5w::isValid()
      */
     public function isValid(): bool
     {

@@ -25,6 +25,8 @@ use Flytachi\Winter\SDK\S5w\Http\HttpClient;
  * $folders->setCache('avatars', 3600, CacheVisibility::SHARED);
  * foreach ($folders->all() as $folder) { … }
  * ```
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/api-reference#folders Folders
  */
 final readonly class Folders
 {
@@ -42,6 +44,7 @@ final readonly class Folders
      * @param int         $limit  1–100
      * @param string|null $search part of a name
      * @return Page<Folder>
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#folderslist Folders::list()
      */
     public function list(int $page = 1, int $limit = 25, ?string $search = null): Page
     {
@@ -58,6 +61,7 @@ final readonly class Folders
      * Every folder, page after page, fetched lazily as you iterate.
      *
      * @return \Generator<int, Folder>
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#foldersall Folders::all()
      */
     public function all(?string $search = null, int $pageSize = 100): \Generator
     {
@@ -71,13 +75,18 @@ final readonly class Folders
 
     /**
      * @throws NotFoundException no folder by that name
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#foldersget Folders::get()
      */
     public function get(string $name): Folder
     {
         return Folder::fromPayload($this->http->json('GET', self::path($name)));
     }
 
-    /** {@see get()}, but `null` instead of a 404. */
+    /**
+     * {@see get()}, but `null` instead of a 404.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#foldersfind-foldersexists Folders::find()
+     */
     public function find(string $name): ?Folder
     {
         try {
@@ -87,6 +96,7 @@ final readonly class Folders
         }
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#foldersfind-foldersexists Folders::exists() */
     public function exists(string $name): bool
     {
         return $this->find($name) !== null;
@@ -100,6 +110,7 @@ final readonly class Folders
      *
      * @throws ConflictException   the name is taken
      * @throws ValidationException the name breaks the rules
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#folderscreate Folders::create()
      */
     public function create(string $name, bool $public = false, Retention $retention = Retention::NONE): Folder
     {
@@ -117,6 +128,8 @@ final readonly class Folders
      * Looks first, since the folder usually exists: one request in the common case,
      * and no 409 in the logs. A 409 from the create still means "someone created it
      * between our two requests", so it falls back to reading it.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#foldersensure Folders::ensure()
      */
     public function ensure(string $name, bool $public = false, Retention $retention = Retention::NONE): Folder
     {
@@ -146,6 +159,7 @@ final readonly class Folders
      *
      * @throws NotFoundException  no folder by that name
      * @throws ConflictException  `rename` is taken by another folder
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#foldersupdate Folders::update()
      */
     public function update(
         string $name,
@@ -166,6 +180,7 @@ final readonly class Folders
         ]));
     }
 
+    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#foldersrename Folders::rename() */
     public function rename(string $name, string $newName): Folder
     {
         return $this->update($name, rename: $newName);
@@ -179,6 +194,7 @@ final readonly class Folders
      * header until they expire.
      *
      * @param int|null $maxAge seconds, 0 … 31536000
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#folderssetcache Folders::setCache()
      */
     public function setCache(string $name, ?int $maxAge, ?CacheVisibility $visibility): Folder
     {
@@ -188,7 +204,11 @@ final readonly class Folders
         ]));
     }
 
-    /** Drop the folder's cache override: inherit the bucket policy again. */
+    /**
+     * Drop the folder's cache override: inherit the bucket policy again.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#foldersresetcache Folders::resetCache()
+     */
     public function resetCache(string $name): Folder
     {
         return $this->setCache($name, null, null);
@@ -198,6 +218,7 @@ final readonly class Folders
      * Delete the folder **and every file inside it**. There is no undo.
      *
      * @throws NotFoundException the folder is already gone
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#foldersdelete Folders::delete()
      */
     public function delete(string $name): void
     {

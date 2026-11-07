@@ -10,6 +10,8 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
 /**
  * What `GET /v1/check` says about the key: its bucket, its access, when it
  * expires and how much room is left.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/entities#keyinfo KeyInfo
  */
 final readonly class KeyInfo implements \JsonSerializable
 {
@@ -33,7 +35,11 @@ final readonly class KeyInfo implements \JsonSerializable
         );
     }
 
-    /** Whether the key will be past its expiry at `$at` (default: now). */
+    /**
+     * Whether the key will be past its expiry at `$at` (default: now).
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/entities#keyinfo KeyInfo
+     */
     public function expiresBefore(\DateTimeInterface $at = new \DateTimeImmutable()): bool
     {
         return $this->expiresAt !== null && $this->expiresAt <= $at;

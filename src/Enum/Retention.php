@@ -7,6 +7,8 @@ namespace Flytachi\Winter\SDK\S5w\Enum;
 /**
  * How long files live in a folder, counted from each file's creation.
  * Mirrors the server's `Retention`; the sweep runs every five minutes.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/options-and-enums#retention Retention
  */
 enum Retention: int
 {
@@ -18,7 +20,11 @@ enum Retention: int
     case HALF_YEAR = 5;
     case YEAR = 6;
 
-    /** null — files are kept until deleted. */
+    /**
+     * null — files are kept until deleted.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/options-and-enums#retention Retention
+     */
     public function interval(): ?\DateInterval
     {
         return match ($this) {

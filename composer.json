@@ -1,6 +1,6 @@
 {
     "name": "flytachi/winter-sdk-s5w",
-    "description": "...",
+    "description": "PHP SDK for S5W, the file store and CDN: buckets, folders, uploads with resumable chunking and deduplication, image processing, typed entities and errors.",
     "type": "library",
     "license": "MIT",
     "scripts": {
@@ -15,18 +15,35 @@
     "require": {
         "php": ">=8.4",
         "flytachi/winter-cast": "^1.3",
-        "flytachi/winter-logger": "^1.1"
+        "composer-runtime-api": "^2.0",
+        "psr/log": "^3.0",
+        "ext-curl": "*"
     },
     "require-dev": {
         "squizlabs/php_codesniffer": "@stable"
     },
     "suggest": {
-        "ext-curl": ""
+        "flytachi/winter-logger": "A PSR-3 logger to pass to S5w: requests and upload events at debug, retries as warnings."
     },
     "homepage": "https://winterframe.net",
-    "support": {},
+    "support": {
+        "issues": "https://github.com/flytachi/winter-sdk-s5w/issues",
+        "source": "https://github.com/flytachi/winter-sdk-s5w",
+        "docs": "https://winterframe.net/packages/sdk-s5w"
+    },
     "keywords": [
         "php",
+        "s5w",
+        "sdk",
+        "api-client",
+        "file-storage",
+        "object-storage",
+        "cdn",
+        "upload",
+        "chunked-upload",
+        "resumable-upload",
+        "deduplication",
+        "image-processing",
         "winter"
     ],
     "authors": [

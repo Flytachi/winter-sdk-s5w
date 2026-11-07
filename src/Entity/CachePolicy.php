@@ -10,6 +10,8 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
 /**
  * A cache override. Each `null` field is inherited from the level above
  * (folder → bucket → instance defaults).
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/entities#cachepolicy CachePolicy
  */
 final readonly class CachePolicy implements \JsonSerializable
 {
@@ -29,7 +31,11 @@ final readonly class CachePolicy implements \JsonSerializable
         );
     }
 
-    /** Whether nothing is overridden here. */
+    /**
+     * Whether nothing is overridden here.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/entities#cachepolicy CachePolicy
+     */
     public function isInherited(): bool
     {
         return $this->maxAge === null && $this->visibility === null;

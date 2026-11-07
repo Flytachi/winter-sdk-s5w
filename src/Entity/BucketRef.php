@@ -8,6 +8,8 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
 
 /**
  * The bucket a key belongs to.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/entities#bucketref BucketRef
  */
 final readonly class BucketRef implements \JsonSerializable
 {

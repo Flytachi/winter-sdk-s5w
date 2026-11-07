@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Знак s5w: два файла, одно общее тело. Цвета — бренд проекта. -->
+  <defs>
+    <linearGradient id="s5w" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4c6ef5"/>
+      <stop offset="55%" stop-color="#3b5bdb"/>
+      <stop offset="100%" stop-color="#7048e8"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#s5w)"/>
+  <g transform="translate(6.4 6.4) scale(2.133)" fill="none" stroke="#fff" stroke-width="2.3" stroke-linejoin="round">
+    <rect x="3" y="3" width="12" height="12" rx="3.2"/>
+    <rect x="9" y="9" width="12" height="12" rx="3.2"/>
+    <path d="M12 9 H15 V12 A3 3 0 0 1 12 15 H9 V12 A3 3 0 0 1 12 9 Z" fill="#fff" stroke="none"/>
+  </g>
+</svg>

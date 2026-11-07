@@ -9,6 +9,8 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
 /**
  * The bytes behind a file. Two files with the same content share one of these
  * on the server (deduplication by SHA-256).
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/entities#filecontent FileContent
  */
 final readonly class FileContent implements \JsonSerializable
 {

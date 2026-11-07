@@ -8,6 +8,8 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
 
 /**
  * Bucket space, in bytes.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/entities#storage Storage
  */
 final readonly class Storage implements \JsonSerializable
 {
@@ -24,13 +26,21 @@ final readonly class Storage implements \JsonSerializable
         return new self(quota: $p->int('quota'), used: $p->int('used'), free: $p->int('free'));
     }
 
-    /** Whether `$bytes` more would still fit. */
+    /**
+     * Whether `$bytes` more would still fit.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/entities#storage Storage
+     */
     public function fits(int $bytes): bool
     {
         return $bytes <= $this->free;
     }
 
-    /** Used share of the quota, 0.0 … 1.0. */
+    /**
+     * Used share of the quota, 0.0 … 1.0.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/entities#storage Storage
+     */
     public function usage(): float
     {
         return $this->quota > 0 ? min(1.0, $this->used / $this->quota) : 0.0;

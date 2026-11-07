@@ -8,6 +8,8 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
 
 /**
  * An image before or after processing.
+ *
+ * @link https://winterframe.net/packages/sdk-s5w/entities#imageinfo ImageInfo
  */
 final readonly class ImageInfo implements \JsonSerializable
 {
