@@ -1,0 +1,38 @@
+{
+    "name": "flytachi/winter-sdk-s5w",
+    "description": "...",
+    "type": "library",
+    "license": "MIT",
+    "scripts": {
+        "cs-check": "phpcs .",
+        "cs-fix": "phpcbf ."
+    },
+    "autoload": {
+        "psr-4": {
+            "Flytachi\\Winter\\SDK\\S5w\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=8.4",
+        "flytachi/winter-cast": "^1.3",
+        "flytachi/winter-logger": "^1.1"
+    },
+    "require-dev": {
+        "squizlabs/php_codesniffer": "@stable"
+    },
+    "suggest": {
+        "ext-curl": ""
+    },
+    "homepage": "https://winterframe.net",
+    "support": {},
+    "keywords": [
+        "php",
+        "winter"
+    ],
+    "authors": [
+        {
+            "name": "Flytachi",
+            "email": "jason.khan.x@gmail.com"
+        }
+    ]
+}
