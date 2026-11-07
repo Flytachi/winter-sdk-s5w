@@ -9,9 +9,9 @@ use Flytachi\Winter\SDK\S5w\Exception\ResponseException;
 /**
  * A decoded JSON answer with typed, checked access.
  *
- * Models read fields through this instead of `$data['x']`, so a missing or
+ * Entities read fields through this instead of `$data['x']`, so a missing or
  * mistyped field becomes one clear {@see ResponseException} naming the field
- * (`GET v1/check: bytes.quota must be int, got string`) instead of a TypeError
+ * (`v1/check: bytes.quota must be int, got string`) instead of a TypeError
  * deep inside a constructor.
  *
  * @internal
@@ -140,6 +140,18 @@ final readonly class Payload
         return $enum::tryFrom($id) ?? throw new ResponseException(
             "S5W {$this->where}: {$this->path($key)} = {$id} is not a known " . $enum,
         );
+    }
+
+    /**
+     * Same as {@see enum()}, for a field that may be `null`.
+     *
+     * @template T of \BackedEnum
+     * @param class-string<T> $enum
+     * @return T|null
+     */
+    public function enumOrNull(string $key, string $enum): ?\BackedEnum
+    {
+        return ($this->data[$key] ?? null) === null ? null : $this->enum($key, $enum);
     }
 
     /** @return list<self> */

@@ -50,7 +50,8 @@ class ApiException extends S5wException
             default => static::class,
         };
 
-        $text = $method !== '' ? "S5W {$method} {$path}: {$status} {$message}" : "S5W: {$status} {$message}";
+        $shown = rawurldecode($path);
+        $text = $path !== '' ? "S5W {$shown}: {$status} {$message}" : "S5W: {$status} {$message}";
 
         return new $class($status, $text, $errors, $method, $path, $previous);
     }

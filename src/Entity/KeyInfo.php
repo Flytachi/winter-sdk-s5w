@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\SDK\S5w\Model;
+namespace Flytachi\Winter\SDK\S5w\Entity;
 
 use Flytachi\Winter\SDK\S5w\Enum\TokenAccess;
 use Flytachi\Winter\SDK\S5w\Support\Payload;

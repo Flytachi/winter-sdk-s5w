@@ -121,7 +121,7 @@ final class HttpClient
         try {
             $response = $request->send($this->client);
         } catch (CastException $e) {
-            throw new TransportException("S5W {$method} {$path}: {$e->getMessage()}", (int) $e->getCode(), $e);
+            throw new TransportException("S5W {$path}: {$e->getMessage()}", (int) $e->getCode(), $e);
         }
 
         if ($response->isSuccess()) {
@@ -139,19 +139,19 @@ final class HttpClient
     {
         $body = $response->body();
         if ($body === null || $body === '') {
-            return new Payload([], "{$method} {$path}");
+            return new Payload([], $path);
         }
 
         try {
             $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
-            throw new ResponseException("S5W {$method} {$path}: the answer is not JSON", 0, $e);
+            throw new ResponseException("S5W {$path}: the answer is not JSON", 0, $e);
         }
         if (!is_array($data)) {
-            throw new ResponseException("S5W {$method} {$path}: expected a JSON object or array");
+            throw new ResponseException("S5W {$path}: expected a JSON object or array");
         }
 
-        return new Payload($data, "{$method} {$path}");
+        return new Payload($data, $path);
     }
 
     /** @return array<string, list<string>> */

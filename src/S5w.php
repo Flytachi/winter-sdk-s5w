@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Flytachi\Winter\SDK\S5w;
 
 use Flytachi\Winter\Cast\Common\CastClient;
+use Flytachi\Winter\SDK\S5w\Api\Folders;
 use Flytachi\Winter\SDK\S5w\Exception\ApiException;
 use Flytachi\Winter\SDK\S5w\Exception\TransportException;
 use Flytachi\Winter\SDK\S5w\Http\HttpClient;
-use Flytachi\Winter\SDK\S5w\Model\KeyInfo;
+use Flytachi\Winter\SDK\S5w\Entity\KeyInfo;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -26,11 +27,13 @@ use Psr\Log\LoggerInterface;
  * ```
  *
  * The API groups hang off it as resources, created on first use:
- * `files()`, `folders()`, `uploads()`, `links()` (coming next).
+ * `folders()`; `files()`, `uploads()`, `links()` are coming next.
  */
 final class S5w
 {
     private readonly HttpClient $http;
+
+    private ?Folders $folders = null;
 
     /**
      * @param CastClient|null      $client Custom HTTP client (own middleware, proxies, cURL options).
@@ -53,6 +56,12 @@ final class S5w
     public function config(): S5wConfig
     {
         return $this->http->config();
+    }
+
+    /** `/v1/folders` — needs a FULL key. */
+    public function folders(): Folders
+    {
+        return $this->folders ??= new Folders($this->http);
     }
 
     /**
