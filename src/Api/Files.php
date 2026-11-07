@@ -29,6 +29,7 @@ use Flytachi\Winter\SDK\S5w\Support\Source;
  * $s5w->files()->get('FXOkqegbdrNRWQgc');                       // File, or NotFoundException
  * $s5w->files()->find($id);                                     // ?File
  * $s5w->files()->list(folder: 'docs', sort: FileSort::SIZE);     // Page<File>
+ * $s5w->files()->delete($file);
  * foreach ($s5w->files()->all(folder: Folder::ROOT) as $file) { … }
  * ```
  */
@@ -134,6 +135,23 @@ final readonly class Files
             yield from $result->items;
             $page = $result->next;
         } while ($page !== null);
+    }
+
+    // ── Changing ─────────────────────────────────────────────────────────────
+
+    /**
+     * Delete a file. It is gone from every delivery URL at once; temporary links to it
+     * start answering 404. The bytes stay while another file shares them
+     * (deduplication) — the other file is not affected.
+     *
+     * @param string|File $id the file's id, or the file itself
+     *
+     * @throws NotFoundException no such file — already deleted, or never existed.
+     *                           Deleting is not idempotent: on a retry, treat it as done.
+     */
+    public function delete(string|File $id): void
+    {
+        $this->http->call('DELETE', self::path($id, 'DELETE'));
     }
 
     // ── Uploading ────────────────────────────────────────────────────────────
