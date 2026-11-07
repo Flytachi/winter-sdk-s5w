@@ -69,6 +69,26 @@ final readonly class Payload
         return is_bool($v) ? $v : $this->fail($key, 'bool', $v);
     }
 
+    /**
+     * A list of strings; an absent or `null` field is an empty list.
+     *
+     * @return list<string>
+     */
+    public function strings(string $key): array
+    {
+        $v = $this->data[$key] ?? [];
+        if (!is_array($v) || !array_is_list($v)) {
+            $this->fail($key, 'list<string>', $v);
+        }
+        foreach ($v as $item) {
+            if (!is_string($item)) {
+                $this->fail($key, 'list<string>', $v);
+            }
+        }
+
+        return $v;
+    }
+
     /** A nested object. */
     public function object(string $key): self
     {

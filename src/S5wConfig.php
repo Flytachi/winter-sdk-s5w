@@ -12,7 +12,7 @@ namespace Flytachi\Winter\SDK\S5w;
  *
  * ```
  * $config = new S5wConfig('https://s5.example.com', 's5w_9f3c…');
- * $config = $config->withTimeout(60)->withRetries(3);
+ * $config = $config->withTimeout(30)->withRetries(3);
  * ```
  */
 final readonly class S5wConfig
@@ -21,12 +21,15 @@ final readonly class S5wConfig
     public string $apiKey;
 
     /**
-     * @param string $baseUrl        Instance address with the scheme, e.g. `https://s5.example.com`.
-     * @param string $apiKey         The bucket key issued in the panel, `s5w_…`.
-     * @param int    $timeout        Seconds for an ordinary API call (uploads/downloads set their own).
-     * @param int    $connectTimeout Seconds to establish the connection.
-     * @param int    $retries        Attempts on a transport failure (connection refused, timeout). 1 = no retry.
-     * @param string|null $userAgent Overrides the default `winter-sdk-s5w` User-Agent.
+     * @param string $baseUrl         Instance address with the scheme, e.g. `https://s5.example.com`.
+     * @param string $apiKey          The bucket key issued in the panel, `s5w_…`.
+     * @param int    $timeout         Seconds for an ordinary API call.
+     * @param int    $connectTimeout  Seconds to establish the connection.
+     * @param int    $retries         Attempts on a transport failure (connection refused, timeout).
+     *                                1 = no retry. Never applied to uploads: a retried upload
+     *                                whose first attempt did land would store the file twice.
+     * @param int    $transferTimeout Seconds for a call that moves file bytes (upload, download).
+     * @param string|null $userAgent  Overrides the default `winter-sdk-s5w` User-Agent.
      */
     public function __construct(
         string $baseUrl,
@@ -34,6 +37,7 @@ final readonly class S5wConfig
         public int $timeout = 15,
         public int $connectTimeout = 5,
         public int $retries = 1,
+        public int $transferTimeout = 300,
         public ?string $userAgent = null,
     ) {
         $baseUrl = rtrim(trim($baseUrl), '/');
@@ -45,8 +49,8 @@ final readonly class S5wConfig
         if ($apiKey === '') {
             throw new S5wException('S5W: API key is empty');
         }
-        if ($timeout < 1 || $connectTimeout < 1 || $retries < 1) {
-            throw new S5wException('S5W: timeout, connectTimeout and retries must be positive');
+        if ($timeout < 1 || $connectTimeout < 1 || $retries < 1 || $transferTimeout < 1) {
+            throw new S5wException('S5W: timeouts and retries must be positive');
         }
 
         $this->baseUrl = $baseUrl;
@@ -55,38 +59,22 @@ final readonly class S5wConfig
 
     public function withTimeout(int $seconds, ?int $connectSeconds = null): self
     {
-        return new self(
-            $this->baseUrl,
-            $this->apiKey,
-            $seconds,
-            $connectSeconds ?? $this->connectTimeout,
-            $this->retries,
-            $this->userAgent,
-        );
+        return $this->copy(timeout: $seconds, connectTimeout: $connectSeconds ?? $this->connectTimeout);
+    }
+
+    public function withTransferTimeout(int $seconds): self
+    {
+        return $this->copy(transferTimeout: $seconds);
     }
 
     public function withRetries(int $attempts): self
     {
-        return new self(
-            $this->baseUrl,
-            $this->apiKey,
-            $this->timeout,
-            $this->connectTimeout,
-            $attempts,
-            $this->userAgent,
-        );
+        return $this->copy(retries: $attempts);
     }
 
     public function withUserAgent(string $userAgent): self
     {
-        return new self(
-            $this->baseUrl,
-            $this->apiKey,
-            $this->timeout,
-            $this->connectTimeout,
-            $this->retries,
-            $userAgent,
-        );
+        return $this->copy(userAgent: $userAgent);
     }
 
     /** The key is a secret: never let it reach a dump or a log. */
@@ -98,7 +86,26 @@ final readonly class S5wConfig
             'timeout' => $this->timeout,
             'connectTimeout' => $this->connectTimeout,
             'retries' => $this->retries,
+            'transferTimeout' => $this->transferTimeout,
             'userAgent' => $this->userAgent,
         ];
+    }
+
+    private function copy(
+        ?int $timeout = null,
+        ?int $connectTimeout = null,
+        ?int $retries = null,
+        ?int $transferTimeout = null,
+        ?string $userAgent = null,
+    ): self {
+        return new self(
+            $this->baseUrl,
+            $this->apiKey,
+            $timeout ?? $this->timeout,
+            $connectTimeout ?? $this->connectTimeout,
+            $retries ?? $this->retries,
+            $transferTimeout ?? $this->transferTimeout,
+            $userAgent ?? $this->userAgent,
+        );
     }
 }

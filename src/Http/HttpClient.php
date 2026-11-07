@@ -67,7 +67,7 @@ final class HttpClient
             $request = $request->withJsonBody($body);
         }
 
-        return $this->decode($this->send($request, $method, $path), $method, $path);
+        return $this->sendJson($request, $method, $path);
     }
 
     /**
@@ -111,6 +111,25 @@ final class HttpClient
             ->timeout($this->config->timeout)
             ->connectTimeout($this->config->connectTimeout)
             ->retry($this->config->retries);
+    }
+
+    /**
+     * {@see request()} for a call that moves file bytes: the transfer timeout and
+     * no retries — a retried upload whose first attempt did land stores the file twice.
+     *
+     * @param array<string, scalar|null> $query
+     */
+    public function transferRequest(string $method, string $path, array $query = []): CastRequest
+    {
+        return $this->request($method, $path, $query)
+            ->timeout($this->config->transferTimeout)
+            ->retry(1);
+    }
+
+    /** Sends a prepared request and decodes its JSON answer. */
+    public function sendJson(CastRequest $request, string $method, string $path): Payload
+    {
+        return $this->decode($this->send($request, $method, $path), $method, $path);
     }
 
     /**
