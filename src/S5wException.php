@@ -21,7 +21,7 @@ namespace Flytachi\Winter\SDK\S5w;
  *     └── ServerException            5xx
  * ```
  *
- * @link https://winterframe.net/packages/sdk-s5w/exceptions Exceptions
+ * @link https://winterframe.net/packages/sdk-s5w/exceptions#s5wexception S5wException
  */
 class S5wException extends \RuntimeException
 {

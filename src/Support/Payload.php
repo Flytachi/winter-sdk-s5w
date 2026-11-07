@@ -15,7 +15,7 @@ use Flytachi\Winter\SDK\S5w\Exception\ResponseException;
  * deep inside a constructor.
  *
  * @internal
- * @link https://winterframe.net/packages/sdk-s5w/http-and-logging HTTP and logging
+ * @link https://winterframe.net/packages/sdk-s5w/http-and-logging#errors-and-answer-checks Answer checks
  */
 final readonly class Payload
 {

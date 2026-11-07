@@ -69,7 +69,7 @@ final class S5w
         return new self(new S5wConfig($baseUrl, $apiKey), logger: $logger);
     }
 
-    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#s5w S5w */
+    /** @link https://winterframe.net/packages/sdk-s5w/api-reference#s5w-config S5w->config() */
     public function config(): S5wConfig
     {
         return $this->http->config();

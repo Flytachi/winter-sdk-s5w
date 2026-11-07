@@ -26,7 +26,7 @@ use Psr\Log\NullLogger;
  * Resources build paths and bodies; they never see cURL or a status code.
  *
  * @internal Used by the SDK's resources; the public surface is {@see \Flytachi\Winter\SDK\S5w\S5w}.
- * @link https://winterframe.net/packages/sdk-s5w/http-and-logging HTTP and logging
+ * @link https://winterframe.net/packages/sdk-s5w/http-and-logging#request-path HTTP and logging
  */
 final class HttpClient
 {
