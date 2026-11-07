@@ -1,109 +1,88 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Flytachi\Winter\SDK\S5w;
 
 use Flytachi\Winter\Cast\Common\CastClient;
-use Flytachi\Winter\Cast\Common\CastHeader;
-use Flytachi\Winter\Cast\Common\CastRequest;
-use Flytachi\Winter\Cast\Common\CastResponse;
-use Flytachi\Winter\Cast\Exception\RequestException;
-use Flytachi\Winter\Cast\Stereotype\LoggingMiddleware;
-use Flytachi\Winter\Logger\LoggerFactory;
+use Flytachi\Winter\SDK\S5w\Exception\ApiException;
+use Flytachi\Winter\SDK\S5w\Exception\TransportException;
+use Flytachi\Winter\SDK\S5w\Http\HttpClient;
+use Flytachi\Winter\SDK\S5w\Model\KeyInfo;
 use Psr\Log\LoggerInterface;
-use Psr\Log\LogLevel;
 
-class S5w
+/**
+ * Client of one s5w bucket — the entry point of the SDK.
+ *
+ * One instance = one key = one bucket. Stateless and safe to share: build it once
+ * (a DI singleton) and reuse it everywhere.
+ *
+ * ```
+ * $s5w = new S5w(new S5wConfig('https://s5.example.com', 's5w_9f3c…'));
+ *
+ * $key = $s5w->check();
+ * $key->bucket->name;         // "media"
+ * $key->storage->free;        // 467587072
+ * ```
+ *
+ * The API groups hang off it as resources, created on first use:
+ * `files()`, `folders()`, `uploads()`, `links()` (coming next).
+ */
+final class S5w
 {
-    private readonly string $baseUrl;
-    private readonly string $apiKey;
-    private readonly ?string $bucketUid;
-    private LoggerInterface $logger;
+    private readonly HttpClient $http;
 
+    /**
+     * @param CastClient|null      $client Custom HTTP client (own middleware, proxies, cURL options).
+     * @param LoggerInterface|null $logger Logs method, URL, status and timing at debug level.
+     */
     public function __construct(
-        string $baseUrl,
-        string $apiKey,
-        ?string $bucketUid = null,
+        S5wConfig $config,
+        ?CastClient $client = null,
+        ?LoggerInterface $logger = null,
     ) {
-        $this->baseUrl = rtrim($baseUrl, '/');
-        $this->apiKey = trim($apiKey);
-        $this->bucketUid = empty($bucketUid) ? null : trim($bucketUid);
-        $this->logger = LoggerFactory::getLogger('S5W');
+        $this->http = new HttpClient($config, $client, $logger);
     }
 
-
-    public function check(): array
+    /** Shortcut for the common case. */
+    public static function connect(string $baseUrl, string $apiKey, ?LoggerInterface $logger = null): self
     {
-        $response = $this->send(
-            CastRequest::get($this->baseUrl . '/v1/check')
-                ->withHeaders($this->headers())
-        );
-
-        return $response;
+        return new self(new S5wConfig($baseUrl, $apiKey), logger: $logger);
     }
 
+    public function config(): S5wConfig
+    {
+        return $this->http->config();
+    }
 
-    private function send(CastRequest $request): mixed
+    /**
+     * Is this key still good, and what is behind it?
+     *
+     * Works with a read-only key too. Call it at start-up and from a health check:
+     * it tells "the key died" (an {@see ApiException}) from "the service is down"
+     * (a {@see TransportException}).
+     *
+     * @throws Exception\UnauthorizedException the key is unknown
+     * @throws Exception\ForbiddenException    the key is disabled or expired
+     * @throws TransportException              the service was not reached
+     */
+    public function check(): KeyInfo
+    {
+        return KeyInfo::fromPayload($this->http->json('GET', 'v1/check'));
+    }
+
+    /**
+     * {@see check()} without the exception: true when the key works.
+     *
+     * A transport failure still throws — "can't tell" is not "no".
+     */
+    public function isValid(): bool
     {
         try {
-            $resp = $request->send($this->client());
-            return $this->tryResult($resp);
-        } catch (RequestException $ex) {
-            throw new S5wException('S5W: ' . $ex->getMessage(), $ex->getCode(), $ex);
+            $this->check();
+            return true;
+        } catch (Exception\UnauthorizedException | Exception\ForbiddenException) {
+            return false;
         }
-    }
-
-    private function client(): CastClient
-    {
-        return new CastClient()
-            ->addMiddleware(new LoggingMiddleware(
-                logger: $this->logger,
-                requestLevel: LogLevel::DEBUG,
-                responseLevel: LogLevel::DEBUG,
-            ));
-    }
-
-    private function headers(): CastHeader
-    {
-        return new CastHeader()
-            ->authBearer($this->apiKey)
-            ->json();
-    }
-
-    protected function tryResult(CastResponse $response, ?string $dataKey = null): mixed
-    {
-        $body = $response->json();
-
-        if (!$response->isSuccess()) {
-            $message = $this->extractErrorMessage($body, $response->statusCode);
-            throw new RequestException($response, $message);
-        }
-
-        // Return specific key if exists, otherwise return full body
-        if ($dataKey !== null && is_array($body)) {
-            return $body[$dataKey] ?? null;
-        }
-
-        return $body;
-    }
-
-    protected function extractErrorMessage(?array $body, int $statusCode): string
-    {
-        if ($body !== null) {
-            // Common error message fields
-            foreach (['message', 'error', 'error_message', 'msg', 'detail'] as $key) {
-                if (isset($body[$key]) && is_string($body[$key])) {
-                    return $body[$key];
-                }
-            }
-
-            // Nested error object
-            if (isset($body['error']) && is_array($body['error'])) {
-                if (isset($body['error']['message'])) {
-                    return $body['error']['message'];
-                }
-            }
-        }
-
-        return "HTTP Error {$statusCode}";
     }
 }
