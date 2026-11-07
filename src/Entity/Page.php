@@ -17,7 +17,7 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
  * @template T
  * @implements \IteratorAggregate<int, T>
  */
-final readonly class Page implements \IteratorAggregate, \Countable
+final readonly class Page implements \IteratorAggregate, \Countable, \JsonSerializable
 {
     /**
      * @param list<T> $items
@@ -76,5 +76,57 @@ final readonly class Page implements \IteratorAggregate, \Countable
     public function count(): int
     {
         return count($this->items);
+    }
+
+    /**
+     * A new page with every item passed through `$fn` — e.g. into your own DTOs.
+     * The meta is kept.
+     *
+     * @template R
+     * @param callable(T): R $fn
+     * @return self<R>
+     */
+    public function map(callable $fn): self
+    {
+        return new self(
+            array_map($fn, $this->items),
+            $this->current,
+            $this->size,
+            $this->total,
+            $this->pages,
+            $this->previous,
+            $this->next,
+        );
+    }
+
+    /**
+     * The server's own shape: `{ "meta": { … }, "data": [ … ] }`. Items that have
+     * `toArray()` are converted; anything else is left for `json_encode`.
+     *
+     * @return array{meta: array<string, int|null>, data: list<mixed>}
+     */
+    public function toArray(): array
+    {
+        return [
+            'meta' => [
+                'current' => $this->current,
+                'size' => $this->size,
+                'total' => $this->total,
+                'pages' => $this->pages,
+                'previous' => $this->previous,
+                'next' => $this->next,
+            ],
+            'data' => array_map(
+                static fn(mixed $item) => is_object($item) && method_exists($item, 'toArray')
+                    ? $item->toArray()
+                    : $item,
+                $this->items,
+            ),
+        ];
+    }
+
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
     }
 }

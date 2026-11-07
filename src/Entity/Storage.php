@@ -9,7 +9,7 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
 /**
  * Bucket space, in bytes.
  */
-final readonly class Storage
+final readonly class Storage implements \JsonSerializable
 {
     public function __construct(
         public int $quota,
@@ -34,5 +34,24 @@ final readonly class Storage
     public function usage(): float
     {
         return $this->quota > 0 ? min(1.0, $this->used / $this->quota) : 0.0;
+    }
+
+    /**
+     * Plain data: dates as ISO 8601 strings, enums by name.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'quota' => $this->quota,
+            'used' => $this->used,
+            'free' => $this->free,
+        ];
+    }
+
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
     }
 }

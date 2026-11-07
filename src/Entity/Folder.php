@@ -11,7 +11,7 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
  * A folder: one level, no nesting, addressed by its name (unique in the bucket).
  * Its settings apply to every file inside.
  */
-final readonly class Folder
+final readonly class Folder implements \JsonSerializable
 {
     public function __construct(
         public string $name,
@@ -35,5 +35,27 @@ final readonly class Folder
             createdAt: $p->time('createdAt'),
             updatedAt: $p->time('updatedAt'),
         );
+    }
+
+    /**
+     * Plain data: dates as ISO 8601 strings, enums by name.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'name' => $this->name,
+            'public' => $this->public,
+            'retention' => $this->retention->name,
+            'cache' => $this->cache->toArray(),
+            'createdAt' => $this->createdAt->format(\DATE_ATOM),
+            'updatedAt' => $this->updatedAt->format(\DATE_ATOM),
+        ];
+    }
+
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
     }
 }
