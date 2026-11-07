@@ -11,6 +11,9 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
  */
 final readonly class File implements \JsonSerializable
 {
+    /** What every file id looks like: 16 characters of `A-Za-z0-9_-`. */
+    public const string ID_PATTERN = '/^[A-Za-z0-9_-]{16}$/';
+
     public function __construct(
         /**
          * 16 characters of `A-Za-z0-9-_` (the server calls it a slug). How the file is
@@ -37,6 +40,15 @@ final readonly class File implements \JsonSerializable
         public \DateTimeImmutable $createdAt,
         public \DateTimeImmutable $updatedAt,
     ) {
+    }
+
+    /**
+     * Whether `$id` has the shape of a file id. Says nothing about whether such a
+     * file exists — handy to reject a malformed id from a URL before any request.
+     */
+    public static function isValidId(string $id): bool
+    {
+        return preg_match(self::ID_PATTERN, $id) === 1;
     }
 
     /** @internal */

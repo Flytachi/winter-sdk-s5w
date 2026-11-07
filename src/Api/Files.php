@@ -9,6 +9,7 @@ use Flytachi\Winter\SDK\S5w\Entity\Folder;
 use Flytachi\Winter\SDK\S5w\Entity\Page;
 use Flytachi\Winter\SDK\S5w\Enum\FileSort;
 use Flytachi\Winter\SDK\S5w\Enum\SortDirection;
+use Flytachi\Winter\SDK\S5w\Exception\NotFoundException;
 use Flytachi\Winter\SDK\S5w\Exception\PayloadTooLargeException;
 use Flytachi\Winter\SDK\S5w\Exception\ValidationException;
 use Flytachi\Winter\SDK\S5w\Http\HttpClient;
@@ -25,6 +26,8 @@ use Flytachi\Winter\SDK\S5w\Support\Source;
  * $s5w->files()->upload($tmp, folder: 'avatars', imageOptions: ImageOptions::webp()->fit(512, 512));
  * $s5w->files()->uploadContent($pdfBytes, 'invoice-42.pdf', folder: 'invoices');
  *
+ * $s5w->files()->get('FXOkqegbdrNRWQgc');                       // File, or NotFoundException
+ * $s5w->files()->find($id);                                     // ?File
  * $s5w->files()->list(folder: 'docs', sort: FileSort::SIZE);     // Page<File>
  * foreach ($s5w->files()->all(folder: Folder::ROOT) as $file) { … }
  * ```
@@ -47,6 +50,36 @@ final readonly class Files
     }
 
     // ── Reading ──────────────────────────────────────────────────────────────
+
+    /**
+     * One file by id. The same object the upload returned, minus `processed`.
+     *
+     * @param string|File $id the file's id, or the file itself (to re-read it)
+     *
+     * @throws NotFoundException no such file in this bucket — one from another bucket
+     *                           answers the same way. An id that is not even shaped like
+     *                           one ({@see File::isValidId()}) is the same answer, without
+     *                           a request.
+     */
+    public function get(string|File $id): File
+    {
+        return File::fromPayload($this->http->json('GET', self::path($id, 'GET')));
+    }
+
+    /** {@see get()}, but `null` instead of a 404 (a malformed id included). */
+    public function find(string|File $id): ?File
+    {
+        try {
+            return $this->get($id);
+        } catch (NotFoundException) {
+            return null;
+        }
+    }
+
+    public function exists(string|File $id): bool
+    {
+        return $this->find($id) !== null;
+    }
 
     /**
      * One page of files.
@@ -183,6 +216,24 @@ final readonly class Files
         $request = $this->http->transferRequest('POST', self::PATH)->withMultipartBody($fields);
 
         return File::fromPayload($this->http->sendJson($request, 'POST', self::PATH));
+    }
+
+    /**
+     * The path of one file. A string that cannot be a file id answers like a missing
+     * file would — a 404 — without asking the server (which would refuse it with a 422).
+     */
+    private static function path(string|File $id, string $method): string
+    {
+        if ($id instanceof File) {
+            return self::PATH . '/' . $id->id;
+        }
+
+        $path = self::PATH . '/' . rawurlencode($id);
+        if (!File::isValidId($id)) {
+            throw NotFoundException::from(404, 'File does not exist (not a valid file id)', [], $method, $path);
+        }
+
+        return $path;
     }
 
     /**
