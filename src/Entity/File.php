@@ -7,16 +7,16 @@ namespace Flytachi\Winter\SDK\S5w\Entity;
 use Flytachi\Winter\SDK\S5w\Support\Payload;
 
 /**
- * A file in the bucket, addressed by its slug.
+ * A file in the bucket, addressed by its {@see $id}.
  */
 final readonly class File implements \JsonSerializable
 {
     public function __construct(
         /**
-         * 16 characters of `A-Za-z0-9-_` — the `id` of the server's answer. How the file
-         * is addressed everywhere, delivery URLs included; safe to store, log and share.
+         * 16 characters of `A-Za-z0-9-_` (the server calls it a slug). How the file is
+         * addressed everywhere, delivery URLs included; safe to store, log and share.
          */
-        public string $slug,
+        public string $id,
         /** Unique inside its folder; a clash on upload becomes `name (1).ext`. */
         public string $name,
         /** null — the bucket root. */
@@ -30,9 +30,9 @@ final readonly class File implements \JsonSerializable
         public ?Processing $processed,
         /** When the folder's retention deletes it; null — kept until deleted. */
         public ?\DateTimeImmutable $expiresAt,
-        /** `/p/{slug}` — needs a key (either kind) in the `Authorization` header. */
+        /** `/p/{id}` — needs a key (either kind) in the `Authorization` header. */
         public string $privateUrl,
-        /** `/o/{bucketId}/{slug}` — no key; null while the file is not public. */
+        /** `/o/{bucketId}/{id}` — no key; null while the file is not public. */
         public ?string $publicUrl,
         public \DateTimeImmutable $createdAt,
         public \DateTimeImmutable $updatedAt,
@@ -45,7 +45,7 @@ final readonly class File implements \JsonSerializable
         $processed = $p->objectOrNull('processed');
 
         return new self(
-            slug: $p->string('id'),
+            id: $p->string('id'),
             name: $p->string('name'),
             folder: $p->stringOrNull('folder'),
             content: FileContent::fromPayload($p->object('content')),
@@ -68,7 +68,7 @@ final readonly class File implements \JsonSerializable
     public function toArray(): array
     {
         return [
-            'slug' => $this->slug,
+            'id' => $this->id,
             'name' => $this->name,
             'folder' => $this->folder,
             'content' => $this->content->toArray(),

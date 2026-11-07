@@ -16,9 +16,9 @@ use Flytachi\Winter\SDK\S5w\S5wException;
  *
  * ```
  * $file = $s5w->files()->upload('/tmp/report.pdf', folder: 'docs');
- * $file->slug;        // "FXOkqegbdrNRWQgc" — keep it, it is how the file is addressed
+ * $file->id;          // "FXOkqegbdrNRWQgc" — keep it, it is how the file is addressed
  *
- * $s5w->files()->upload($tmp, folder: 'avatars', image: ImageOptions::webp()->fit(512, 512));
+ * $s5w->files()->upload($tmp, folder: 'avatars', imageOptions: ImageOptions::webp()->fit(512, 512));
  * $s5w->files()->uploadContent($pdfBytes, 'invoice-42.pdf', folder: 'invoices');
  * ```
  */
@@ -43,8 +43,11 @@ final readonly class Files
      * @param string|\SplFileInfo $file   path to a readable file
      * @param string|null         $folder folder name; null — the bucket root
      * @param string|null         $name   stored name; null — the file's own name.
-     *                                    Taken in the folder already → `name (1).ext`
-     * @param ImageOptions|null   $image  re-encode / resize; for images only
+     *                                    Taken in the folder already → `name (1).ext`.
+     *                                    Uploading a temporary file (e.g. a request upload's
+     *                                    `tmp_name`)? Pass the original name here, or the
+     *                                    temporary one is stored.
+     * @param ImageOptions|null   $imageOptions re-encode / resize; for images only
      *
      * @throws ValidationException      no such folder, bad image options, image options on a non-image
      * @throws PayloadTooLargeException the bucket quota is full
@@ -53,7 +56,7 @@ final readonly class Files
         string|\SplFileInfo $file,
         ?string $folder = null,
         ?string $name = null,
-        ?ImageOptions $image = null,
+        ?ImageOptions $imageOptions = null,
     ): File {
         $path = $file instanceof \SplFileInfo ? $file->getPathname() : $file;
         if (!is_file($path) || !is_readable($path)) {
@@ -63,7 +66,7 @@ final readonly class Files
         $size = (int) filesize($path);
         self::assertSingleRequest($size);
 
-        return $this->send(new \CURLFile($path, '', basename($path)), $folder, $name, $image);
+        return $this->send(new \CURLFile($path, '', basename($path)), $folder, $name, $imageOptions);
     }
 
     /**
@@ -79,15 +82,19 @@ final readonly class Files
         string $content,
         string $name,
         ?string $folder = null,
-        ?ImageOptions $image = null,
+        ?ImageOptions $imageOptions = null,
     ): File {
         self::assertSingleRequest(strlen($content));
 
-        return $this->send(new \CURLStringFile($content, $name), $folder, null, $image);
+        return $this->send(new \CURLStringFile($content, $name), $folder, null, $imageOptions);
     }
 
-    private function send(\CURLFile|\CURLStringFile $part, ?string $folder, ?string $name, ?ImageOptions $image): File
-    {
+    private function send(
+        \CURLFile|\CURLStringFile $part,
+        ?string $folder,
+        ?string $name,
+        ?ImageOptions $imageOptions,
+    ): File {
         $fields = ['file' => $part];
         if ($folder !== null && $folder !== '') {
             $fields['folder'] = $folder;
@@ -95,7 +102,7 @@ final readonly class Files
         if ($name !== null && $name !== '') {
             $fields['name'] = $name;
         }
-        foreach ($image?->toFields() ?? [] as $key => $value) {
+        foreach ($imageOptions?->toFields() ?? [] as $key => $value) {
             $fields[$key] = (string) $value;
         }
 
