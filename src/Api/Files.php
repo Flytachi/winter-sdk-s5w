@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Flytachi\Winter\SDK\S5w\Api;
 
 use Flytachi\Winter\SDK\S5w\Entity\File;
+use Flytachi\Winter\SDK\S5w\Entity\Folder;
+use Flytachi\Winter\SDK\S5w\Entity\Page;
+use Flytachi\Winter\SDK\S5w\Enum\FileSort;
+use Flytachi\Winter\SDK\S5w\Enum\SortDirection;
 use Flytachi\Winter\SDK\S5w\Exception\PayloadTooLargeException;
 use Flytachi\Winter\SDK\S5w\Exception\ValidationException;
 use Flytachi\Winter\SDK\S5w\Http\HttpClient;
@@ -20,6 +24,9 @@ use Flytachi\Winter\SDK\S5w\Support\Source;
  *
  * $s5w->files()->upload($tmp, folder: 'avatars', imageOptions: ImageOptions::webp()->fit(512, 512));
  * $s5w->files()->uploadContent($pdfBytes, 'invoice-42.pdf', folder: 'invoices');
+ *
+ * $s5w->files()->list(folder: 'docs', sort: FileSort::SIZE);     // Page<File>
+ * foreach ($s5w->files()->all(folder: Folder::ROOT) as $file) { … }
  * ```
  */
 final readonly class Files
@@ -38,6 +45,65 @@ final readonly class Files
         private Uploads $uploads,
     ) {
     }
+
+    // ── Reading ──────────────────────────────────────────────────────────────
+
+    /**
+     * One page of files.
+     *
+     * @param int                $page   from 1
+     * @param int                $limit  1–100
+     * @param string|null        $search part of the name, case-insensitive
+     * @param string|Folder|null $folder one folder (by name or entity); {@see Folder::ROOT} —
+     *                                   only the files outside any folder; null — the whole bucket
+     * @return Page<File>
+     *
+     * @throws ValidationException no such folder
+     */
+    public function list(
+        int $page = 1,
+        int $limit = 25,
+        ?string $search = null,
+        string|Folder|null $folder = null,
+        FileSort $sort = FileSort::CREATED,
+        SortDirection $direction = SortDirection::DESC,
+    ): Page {
+        $payload = $this->http->json('GET', self::PATH, query: [
+            'page' => $page,
+            'limit' => $limit,
+            'search' => $search === '' ? null : $search,
+            'folder' => self::folderFilter($folder),
+            'sort' => $sort->value,
+            'dir' => $direction->value,
+        ]);
+
+        return Page::fromPayload($payload, File::fromPayload(...));
+    }
+
+    /**
+     * Every matching file, page after page, fetched lazily as you iterate.
+     *
+     * @param string|Folder|null $folder as in {@see list()}
+     * @return \Generator<int, File>
+     *
+     * @throws ValidationException no such folder
+     */
+    public function all(
+        ?string $search = null,
+        string|Folder|null $folder = null,
+        FileSort $sort = FileSort::CREATED,
+        SortDirection $direction = SortDirection::DESC,
+        int $pageSize = 100,
+    ): \Generator {
+        $page = 1;
+        do {
+            $result = $this->list($page, $pageSize, $search, $folder, $sort, $direction);
+            yield from $result->items;
+            $page = $result->next;
+        } while ($page !== null);
+    }
+
+    // ── Uploading ────────────────────────────────────────────────────────────
 
     /**
      * Upload a file from disk.
@@ -117,5 +183,19 @@ final readonly class Files
         $request = $this->http->transferRequest('POST', self::PATH)->withMultipartBody($fields);
 
         return File::fromPayload($this->http->sendJson($request, 'POST', self::PATH));
+    }
+
+    /**
+     * The `folder` query value: null — not sent (whole bucket); `''` — the root;
+     * otherwise the folder's name.
+     */
+    private static function folderFilter(string|Folder|null $folder): ?string
+    {
+        return match (true) {
+            $folder instanceof Folder => $folder->name,
+            $folder === Folder::ROOT => '',
+            $folder === '' => null,
+            default => $folder,
+        };
     }
 }

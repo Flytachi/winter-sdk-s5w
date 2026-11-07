@@ -73,7 +73,7 @@ final class HttpClient
     /**
      * A JSON call: sends `$body` as JSON (if given) and decodes the JSON answer.
      *
-     * @param array<string, scalar|null> $query  null values are dropped
+     * @param array<string, scalar|null> $query  null values are dropped; '' is sent as it is
      */
     public function json(string $method, string $path, ?array $body = null, array $query = []): Payload
     {
@@ -104,7 +104,8 @@ final class HttpClient
      */
     public function request(string $method, string $path, array $query = [], array $headers = []): CastRequest
     {
-        $query = array_filter($query, static fn($v) => $v !== null && $v !== '');
+        // Only null means "not given": an empty string is a value (`folder=` — the bucket root).
+        $query = array_filter($query, static fn($v) => $v !== null);
         $url = $this->url($path);
 
         $request = match (strtoupper($method)) {

@@ -13,6 +13,13 @@ use Flytachi\Winter\SDK\S5w\Support\Payload;
  */
 final readonly class Folder implements \JsonSerializable
 {
+    /**
+     * "No folder" — the bucket root — where a folder is expected as a filter:
+     * `files()->list(folder: Folder::ROOT)` lists only the files outside any folder.
+     * `/` can never be a real folder's name, so the two never clash.
+     */
+    public const string ROOT = '/';
+
     public function __construct(
         public string $name,
         /** Files inside are served at `/o/{bucketId}/{slug}` without a key. */
