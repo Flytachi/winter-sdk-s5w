@@ -19,8 +19,14 @@ use Flytachi\Winter\SDK\S5w\Exception\ResponseException;
  */
 final readonly class Payload
 {
-    /** Timestamps s5w sends: `2026-08-17 18:22:04 +00:00`. */
-    private const string TIME_FORMAT = 'Y-m-d H:i:s P';
+    /**
+     * Timestamps, tried in order. RFC 3339 (`2026-11-08T17:10:44+00:00`) is what s5w
+     * sends everywhere since it unified its answers; the space-separated form
+     * (`2026-11-08 17:10:44 +00:00`) is what older servers sent for a just-created object.
+     * Anything else — e.g. PostgreSQL's raw `2026-11-08 17:10:44+00` from older
+     * servers — falls through to the general parser.
+     */
+    private const array TIME_FORMATS = [\DATE_ATOM, 'Y-m-d H:i:s P'];
 
     public function __construct(
         private array $data,
@@ -191,16 +197,18 @@ final readonly class Payload
 
     private function parseTime(string $key, string $value): \DateTimeImmutable
     {
-        $time = \DateTimeImmutable::createFromFormat(self::TIME_FORMAT, $value);
-        if ($time === false) {
-            try {
-                $time = new \DateTimeImmutable($value);
-            } catch (\Exception) {
-                throw new ResponseException("S5W {$this->where}: {$this->path($key)} = '{$value}' is not a time");
+        foreach (self::TIME_FORMATS as $format) {
+            $time = \DateTimeImmutable::createFromFormat($format, $value);
+            if ($time !== false) {
+                return $time;
             }
         }
 
-        return $time;
+        try {
+            return new \DateTimeImmutable($value);
+        } catch (\Exception) {
+            throw new ResponseException("S5W {$this->where}: {$this->path($key)} = '{$value}' is not a time");
+        }
     }
 
     private function value(string $key): mixed
