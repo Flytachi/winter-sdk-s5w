@@ -155,7 +155,7 @@ final class HttpClient
     /**
      * Sends and returns the raw response if the status is a success; otherwise throws.
      *
-     * Logs one debug line per request — `S5W GET v1/check → 200 (21 ms)` — never headers,
+     * Logs one debug line per request — `GET v1/check → 200 (21 ms)` — never headers,
      * so the key stays out. Failures are not logged as errors here: they are thrown, and
      * the caller decides.
      */
@@ -166,7 +166,7 @@ final class HttpClient
         try {
             $response = $request->send($this->client);
         } catch (CastException $e) {
-            $this->logger->debug('S5W {method} {path} → failed ({ms} ms): {error}', [
+            $this->logger->debug('{method} {path} → failed ({ms} ms): {error}', [
                 'method' => $method,
                 'path' => rawurldecode($path),
                 'ms' => self::elapsed($started),
@@ -175,7 +175,7 @@ final class HttpClient
             throw new TransportException("S5W {$path}: {$e->getMessage()}", (int) $e->getCode(), $e);
         }
 
-        $this->logger->debug('S5W {method} {path} → {status} ({ms} ms)', [
+        $this->logger->debug('{method} {path} → {status} ({ms} ms)', [
             'method' => $method,
             'path' => rawurldecode($path),
             'status' => $response->statusCode,

@@ -280,7 +280,7 @@ final readonly class Uploads
             ));
         }
 
-        $this->http->logger()->debug('S5W upload {id} resumed at {offset} of {size} bytes', [
+        $this->http->logger()->debug('upload {id} resumed at {offset} of {size} bytes', [
             'id' => $current->id,
             'offset' => $current->offset,
             'size' => $current->size,
@@ -311,7 +311,7 @@ final readonly class Uploads
 
         $session = $this->start($name ?? $source->name, $source->size, $folder, $hash, $imageOptions);
         if ($session->file !== null) {
-            $this->http->logger()->debug('S5W upload deduplicated: {name} ({size} bytes) → file {file}, nothing sent', [
+            $this->http->logger()->debug('upload deduplicated: {name} ({size} bytes) → file {file}, nothing sent', [
                 'name' => $session->name,
                 'size' => $session->size,
                 'file' => $session->file->id,
@@ -322,7 +322,7 @@ final readonly class Uploads
             return $session->file;
         }
 
-        $this->http->logger()->debug('S5W upload {id} started: {name}, {size} bytes in chunks of {chunk}', [
+        $this->http->logger()->debug('upload {id} started: {name}, {size} bytes in chunks of {chunk}', [
             'id' => $session->id,
             'name' => $session->name,
             'size' => $session->size,
@@ -366,7 +366,7 @@ final readonly class Uploads
                 $session = $this->recover($session, $e, ++$failures);
             } catch (ApiException $e) {
                 // The data itself is refused (too large, too small, session gone): no retry helps.
-                $this->http->logger()->error('S5W upload {id} refused at {offset}: {error}', [
+                $this->http->logger()->error('upload {id} refused at {offset}: {error}', [
                     'id' => $session->id,
                     'offset' => $session->offset,
                     'error' => $e->getMessage(),
@@ -399,7 +399,7 @@ final readonly class Uploads
         $log = $this->http->logger();
 
         if ($failures >= self::ATTEMPTS) {
-            $log->error('S5W upload {id} interrupted at {offset} of {size} after {attempts} attempts: {error}', [
+            $log->error('upload {id} interrupted at {offset} of {size} after {attempts} attempts: {error}', [
                 'id' => $session->id,
                 'offset' => $session->offset,
                 'size' => $session->size,
@@ -410,7 +410,7 @@ final readonly class Uploads
         }
 
         $delay = self::BACKOFF_MS * (2 ** ($failures - 1));
-        $log->warning('S5W upload {id}: chunk at {offset} failed (attempt {attempt}/{attempts}), '
+        $log->warning('upload {id}: chunk at {offset} failed (attempt {attempt}/{attempts}), '
             . 'retry in {delay} ms: {error}', [
             'id' => $session->id,
             'offset' => $session->offset,
@@ -427,7 +427,7 @@ final readonly class Uploads
             return $session; // still unreachable: the next attempt will tell
         }
 
-        $log->debug('S5W upload {id}: the server holds {offset} of {size} bytes, continuing', [
+        $log->debug('upload {id}: the server holds {offset} of {size} bytes, continuing', [
             'id' => $current->id,
             'offset' => $current->offset,
             'size' => $current->size,
@@ -443,7 +443,7 @@ final readonly class Uploads
         for ($failures = 1;; $failures++) {
             try {
                 $file = $this->complete($session);
-                $log->debug('S5W upload {id} completed: {name} → file {file}', [
+                $log->debug('upload {id} completed: {name} → file {file}', [
                     'id' => $session->id,
                     'name' => $file->name,
                     'file' => $file->id,
@@ -455,7 +455,7 @@ final readonly class Uploads
                 try {
                     $this->status($session);
                 } catch (NotFoundException) {
-                    $log->error('S5W upload {id} completed but not confirmed: {error}', [
+                    $log->error('upload {id} completed but not confirmed: {error}', [
                         'id' => $session->id,
                         'error' => $e->getMessage(),
                     ]);
@@ -464,7 +464,7 @@ final readonly class Uploads
                     // unknown yet — count it as a failure and try again
                 }
                 if ($failures >= self::ATTEMPTS) {
-                    $log->error('S5W upload {id}: completing failed after {attempts} attempts: {error}', [
+                    $log->error('upload {id}: completing failed after {attempts} attempts: {error}', [
                         'id' => $session->id,
                         'attempts' => $failures,
                         'error' => $e->getMessage(),
@@ -472,7 +472,7 @@ final readonly class Uploads
                     throw new UploadInterruptedException($session->id, $session->offset, $session->size, $e);
                 }
                 $delay = self::BACKOFF_MS * (2 ** ($failures - 1));
-                $log->warning('S5W upload {id}: completing failed (attempt {attempt}/{attempts}), '
+                $log->warning('upload {id}: completing failed (attempt {attempt}/{attempts}), '
                     . 'retry in {delay} ms: {error}', [
                     'id' => $session->id,
                     'attempt' => $failures,
@@ -482,7 +482,7 @@ final readonly class Uploads
                 ]);
                 usleep($delay * 1000);
             } catch (ApiException $e) {
-                $log->error('S5W upload {id}: completing refused: {error}', [
+                $log->error('upload {id}: completing refused: {error}', [
                     'id' => $session->id,
                     'error' => $e->getMessage(),
                 ]);
