@@ -270,8 +270,12 @@ final readonly class Files
         }
 
         $path = (string) $source->pathname();
+        // The server takes the extension from this file name when it cannot tell the type from
+        // the content. A given name is what the caller means; the path may be a temporary
+        // upload (`/tmp/swoole.upfile.a1b2c3`) whose "extension" is noise.
+        $postname = $name !== null && $name !== '' ? $name : basename($path);
 
-        return $this->send(new \CURLFile($path, '', basename($path)), $folder, $name, $imageOptions);
+        return $this->send(new \CURLFile($path, '', $postname), $folder, $name, $imageOptions);
     }
 
     /**

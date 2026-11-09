@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Flytachi\Winter\SDK\S5w\Http;
 
 use Composer\InstalledVersions;
-use Flytachi\Winter\Cast\Common\CastClient;
-use Flytachi\Winter\Cast\Common\CastHeader;
-use Flytachi\Winter\Cast\Common\CastRequest;
-use Flytachi\Winter\Cast\Common\CastResponse;
+use Flytachi\Winter\Cast\Client\CastClient;
+use Flytachi\Winter\Cast\Client\RetryPolicy;
 use Flytachi\Winter\Cast\Exception\CastException;
+use Flytachi\Winter\Cast\Message\CastRequest;
+use Flytachi\Winter\Cast\Message\CastResponse;
 use Flytachi\Winter\SDK\S5w\Exception\ApiException;
 use Flytachi\Winter\SDK\S5w\Exception\ResponseException;
 use Flytachi\Winter\SDK\S5w\Exception\TransportException;
@@ -40,8 +40,9 @@ final class HttpClient
     private readonly LoggerInterface $logger;
 
     /**
-     * @param CastClient|null      $client Bring your own to add middleware or cURL defaults
-     *                                     (e.g. winter-cast's LoggingMiddleware for a full HTTP trace).
+     * @param CastClient|null      $client Bring your own to add middleware or cURL options (a proxy,
+     *                                     TLS settings). Its timeouts and retries are replaced by
+     *                                     the config's on every request; its headers stay underneath.
      * @param LoggerInterface|null $logger Gets one debug line per request and the SDK's own events;
      *                                     null — nothing is logged.
      */
@@ -50,7 +51,7 @@ final class HttpClient
         ?CastClient $client = null,
         ?LoggerInterface $logger = null,
     ) {
-        $this->client = $client ?? new CastClient($config->timeout, $config->connectTimeout);
+        $this->client = $client ?? new CastClient();
         $this->logger = $logger === null ? new NullLogger() : new InterpolatingLogger($logger);
     }
 
@@ -109,29 +110,31 @@ final class HttpClient
         $query = array_filter($query, static fn($v) => $v !== null);
         $url = $this->url($path);
 
-        $request = match (strtoupper($method)) {
-            'GET' => CastRequest::get($url, $query ?: null),
-            'POST' => CastRequest::post($url, $query ?: null),
-            'PUT' => CastRequest::put($url, $query ?: null),
-            'PATCH' => CastRequest::patch($url, $query ?: null),
-            'DELETE' => CastRequest::delete($url, $query ?: null),
-            'HEAD' => CastRequest::head($url, $query ?: null),
-            default => throw new \InvalidArgumentException("Unsupported HTTP method {$method}"),
-        };
-
-        $head = CastHeader::instance()
-            ->authBearer($this->config->apiKey)
-            ->set('Accept', 'application/json')
-            ->userAgent($this->config->userAgent ?? self::userAgent());
-        foreach ($headers as $key => $value) {
-            $head->set($key, $value);
+        $method = strtoupper($method);
+        if (!in_array($method, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'], true)) {
+            throw new \InvalidArgumentException("Unsupported HTTP method {$method}");
         }
 
-        return $request
-            ->withHeaders($head)
-            ->timeout($this->config->timeout)
-            ->connectTimeout($this->config->connectTimeout)
-            ->retry($this->config->retries);
+        return $this->client->request($method, $url)
+            ->withQuery($query)
+            ->withBearerToken($this->config->apiKey)
+            ->withAccept('application/json')
+            ->withUserAgent($this->config->userAgent ?? self::userAgent())
+            ->withHeaders($headers)
+            ->withTimeout($this->config->timeout, $this->config->connectTimeout)
+            ->withRetry($this->retryPolicy());
+    }
+
+    /**
+     * `retries` attempts on a network failure (connection refused, timeout), with pauses of
+     * 500 ms, 1 s, 2 s… ±30 %. Any method: an ordinary API call is safe to repeat (see the
+     * delete caveat in the docs). An error status is never retried — it becomes an exception.
+     */
+    private function retryPolicy(): RetryPolicy
+    {
+        return $this->config->retries > 1
+            ? RetryPolicy::exponential($this->config->retries, 500)->withNonIdempotent()
+            : RetryPolicy::none();
     }
 
     /**
@@ -148,8 +151,8 @@ final class HttpClient
         array $headers = [],
     ): CastRequest {
         return $this->request($method, $path, $query, $headers)
-            ->timeout($this->config->transferTimeout)
-            ->retry(1);
+            ->withTimeout($this->config->transferTimeout, $this->config->connectTimeout)
+            ->withoutRetry();
     }
 
     /** Sends a prepared request and decodes its JSON answer. */
@@ -170,7 +173,8 @@ final class HttpClient
         $started = hrtime(true);
 
         try {
-            $response = $request->send($this->client);
+            // sendRequest(): an error status is a response here, whatever the client's throwOnError.
+            $response = $this->client->sendRequest($request);
         } catch (CastException $e) {
             $this->logger->debug('{method} {path} → failed ({ms} ms): {error}', [
                 'method' => $method,
@@ -184,7 +188,7 @@ final class HttpClient
         $this->logger->debug('{method} {path} → {status} ({ms} ms)', [
             'method' => $method,
             'path' => rawurldecode($path),
-            'status' => $response->statusCode,
+            'status' => $response->getStatusCode(),
             'ms' => self::elapsed($started),
         ]);
 
@@ -193,16 +197,17 @@ final class HttpClient
         }
 
         $body = $response->json();
-        $message = is_string($body['message'] ?? null) ? $body['message'] : "HTTP {$response->statusCode}";
+        $status = $response->getStatusCode();
+        $message = is_string($body['message'] ?? null) ? $body['message'] : "HTTP {$status}";
         $errors = is_array($body['errors'] ?? null) ? self::errors($body['errors']) : [];
 
-        throw ApiException::from($response->statusCode, $message, $errors, $method, $path);
+        throw ApiException::from($status, $message, $errors, $method, $path);
     }
 
     private function decode(CastResponse $response, string $method, string $path): Payload
     {
         $body = $response->body();
-        if ($body === null || $body === '') {
+        if ($body === '') {
             return new Payload([], $path);
         }
 

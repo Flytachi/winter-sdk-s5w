@@ -97,7 +97,7 @@ final readonly class Uploads
         $body += $imageOptions?->toFields() ?? [];
 
         // No retries: with a known hash a start can create the file, and a retry a second one.
-        $request = $this->http->request('POST', self::PATH)->retry(1)->withJsonBody($body);
+        $request = $this->http->request('POST', self::PATH)->withoutRetry()->withJsonBody($body);
 
         return UploadSession::fromPayload($this->http->sendJson($request, 'POST', self::PATH));
     }
@@ -122,7 +122,7 @@ final readonly class Uploads
             $headers['Upload-Offset'] = (string) $offset;
         }
 
-        $request = $this->http->transferRequest('PATCH', $path, headers: $headers)->withBody($chunk);
+        $request = $this->http->transferRequest('PATCH', $path, headers: $headers)->withStringBody($chunk);
 
         return UploadSession::fromPayload($this->http->sendJson($request, 'PATCH', $path));
     }

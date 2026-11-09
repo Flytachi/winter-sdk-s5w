@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\SDK\S5w;
 
-use Flytachi\Winter\Cast\Common\CastClient;
+use Flytachi\Winter\Cast\Client\CastClient;
 use Flytachi\Winter\SDK\S5w\Api\Files;
 use Flytachi\Winter\SDK\S5w\Api\Folders;
 use Flytachi\Winter\SDK\S5w\Api\Uploads;
