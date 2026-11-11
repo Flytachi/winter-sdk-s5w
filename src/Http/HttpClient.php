@@ -7,6 +7,8 @@ namespace Flytachi\Winter\SDK\S5w\Http;
 use Composer\InstalledVersions;
 use Flytachi\Winter\Cast\Client\CastClient;
 use Flytachi\Winter\Cast\Client\RetryPolicy;
+use Flytachi\Winter\Cast\Client\Timeouts;
+use Flytachi\Winter\Cast\Message\TransferProgress;
 use Flytachi\Winter\Cast\Exception\CastException;
 use Flytachi\Winter\Cast\Exception\TooLargeException;
 use Flytachi\Winter\Cast\Message\CastRequest;
@@ -33,6 +35,9 @@ use Psr\Log\NullLogger;
 final class HttpClient
 {
     private const string PACKAGE = 'flytachi/winter-sdk-s5w';
+
+    /** Seconds a download may stall (under 1 KiB/s) before it is cut. */
+    public const int DOWNLOAD_IDLE = 60;
 
     /** Built once per process: `WinterSDK/1.0.0`. */
     private static ?string $userAgent = null;
@@ -184,6 +189,40 @@ final class HttpClient
         }
     }
 
+    /**
+     * `HEAD` of a delivery path: the headers of the file (size, type, ETag, name), no body.
+     */
+    public function head(string $path): CastResponse
+    {
+        return $this->send($this->request('HEAD', $path)->withAccept('*/*'), 'HEAD', $path);
+    }
+
+    /**
+     * A file's bytes from the delivery endpoint straight into `$sink`, written from its
+     * current position — only a 2xx body is written. A 416 is returned too (the caller
+     * decides what an unsatisfiable range means); any other error status throws.
+     *
+     * No total time limit: the transfer is cut only when it stalls — under 1 KiB/s for
+     * {@see DOWNLOAD_IDLE} seconds. Not retried here: the caller resumes with a `Range`.
+     *
+     * @param resource                               $sink
+     * @param array<string, string>                  $headers `Range`, `If-Range`
+     * @param (callable(int $downloaded): void)|null $onProgress bytes of this response so far
+     */
+    public function download(string $path, $sink, array $headers = [], ?callable $onProgress = null): CastResponse
+    {
+        $request = $this->request('GET', $path, headers: $headers)
+            ->withAccept('*/*')
+            ->withTimeouts(Timeouts::forDownload(self::DOWNLOAD_IDLE, 1024, $this->config->connectTimeout))
+            ->withoutRetry()
+            ->sinkTo($sink);
+        if ($onProgress !== null) {
+            $request = $request->onProgress(static fn(TransferProgress $p) => $onProgress($p->downloaded));
+        }
+
+        return $this->send($request, 'GET', $path, accept: [416]);
+    }
+
     /** Sends a prepared request and decodes its JSON answer. */
     public function sendJson(CastRequest $request, string $method, string $path): Payload
     {
@@ -196,8 +235,10 @@ final class HttpClient
      * Logs one debug line per request — `GET v1/check → 200 (21 ms)` — never headers,
      * so the key stays out. Failures are not logged as errors here: they are thrown, and
      * the caller decides.
+     *
+     * @param list<int> $accept error statuses to return instead of throwing
      */
-    public function send(CastRequest $request, string $method, string $path): CastResponse
+    public function send(CastRequest $request, string $method, string $path, array $accept = []): CastResponse
     {
         $started = hrtime(true);
 
@@ -221,13 +262,16 @@ final class HttpClient
             'ms' => self::elapsed($started),
         ]);
 
-        if ($response->isSuccess()) {
+        if ($response->isSuccess() || in_array($response->getStatusCode(), $accept, true)) {
             return $response;
         }
 
         $body = $response->json();
         $status = $response->getStatusCode();
-        $message = is_string($body['message'] ?? null) ? $body['message'] : "HTTP {$status}";
+        // No JSON message (a HEAD, a proxy's page): the status's reason phrase says enough.
+        $message = is_string($body['message'] ?? null)
+            ? $body['message']
+            : ($response->getReasonPhrase() !== '' ? $response->getReasonPhrase() : "HTTP {$status}");
         $errors = is_array($body['errors'] ?? null) ? self::errors($body['errors']) : [];
 
         throw ApiException::from($status, $message, $errors, $method, $path);

@@ -7,6 +7,7 @@ namespace Flytachi\Winter\SDK\S5w;
 use Flytachi\Winter\Cast\Client\CastClient;
 use Flytachi\Winter\SDK\S5w\Api\Files;
 use Flytachi\Winter\SDK\S5w\Api\Folders;
+use Flytachi\Winter\SDK\S5w\Api\Links;
 use Flytachi\Winter\SDK\S5w\Api\Uploads;
 use Flytachi\Winter\SDK\S5w\Exception\ApiException;
 use Flytachi\Winter\SDK\S5w\Exception\TransportException;
@@ -29,7 +30,7 @@ use Psr\Log\LoggerInterface;
  * ```
  *
  * The API groups hang off it as resources, created on first use:
- * `folders()`, `files()`, `uploads()`; `links()` is coming next.
+ * `folders()`, `files()`, `uploads()`, `links()`.
  *
  * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5w S5w
  */
@@ -42,6 +43,8 @@ final class S5w
     private ?Files $files = null;
 
     private ?Uploads $uploads = null;
+
+    private ?Links $links = null;
 
     /**
      * @param CastClient|null      $client Custom HTTP client (own middleware, proxies, cURL options).
@@ -103,6 +106,16 @@ final class S5w
     public function uploads(): Uploads
     {
         return $this->uploads ??= new Uploads($this->http);
+    }
+
+    /**
+     * Temporary links `/t/…` to files — needs a FULL key.
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#s5wfolders-s5wfiles-s5wuploads S5w::links()
+     */
+    public function links(): Links
+    {
+        return $this->links ??= new Links($this->http);
     }
 
     /**

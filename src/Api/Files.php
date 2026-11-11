@@ -4,18 +4,23 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\SDK\S5w\Api;
 
+use Flytachi\Winter\SDK\S5w\Entity\Download;
 use Flytachi\Winter\SDK\S5w\Entity\File;
 use Flytachi\Winter\SDK\S5w\Entity\Folder;
 use Flytachi\Winter\SDK\S5w\Entity\Page;
 use Flytachi\Winter\SDK\S5w\Enum\FileSort;
 use Flytachi\Winter\SDK\S5w\Enum\SortDirection;
+use Flytachi\Winter\SDK\S5w\Exception\ApiException;
 use Flytachi\Winter\SDK\S5w\Exception\ConflictException;
 use Flytachi\Winter\SDK\S5w\Exception\ContentTooLargeException;
+use Flytachi\Winter\SDK\S5w\Exception\DownloadInterruptedException;
 use Flytachi\Winter\SDK\S5w\Exception\NotFoundException;
 use Flytachi\Winter\SDK\S5w\Exception\PayloadTooLargeException;
 use Flytachi\Winter\SDK\S5w\Exception\ResponseException;
+use Flytachi\Winter\SDK\S5w\Exception\TransportException;
 use Flytachi\Winter\SDK\S5w\Exception\ValidationException;
 use Flytachi\Winter\SDK\S5w\Http\HttpClient;
+use Flytachi\Winter\SDK\S5w\S5wException;
 use Flytachi\Winter\SDK\S5w\Option\ImageOptions;
 use Flytachi\Winter\SDK\S5w\Support\Source;
 
@@ -37,6 +42,7 @@ use Flytachi\Winter\SDK\S5w\Support\Source;
  * $s5w->files()->update($file, 'Q3-final.pdf', 'archive');       // both at once, one request
  * $s5w->files()->delete($file);
  * $bytes = $s5w->files()->contents($file);                    // the bytes, up to 16 MiB
+ * $s5w->files()->download($file, '/var/data/');                 // to disk, resumable
  * foreach ($s5w->files()->all(folder: Folder::ROOT) as $file) { … }
  * ```
  *
@@ -56,6 +62,12 @@ final readonly class Files
     public const int CONTENTS_LIMIT = 16 * 1024 * 1024;
 
     private const string DELIVERY_PATH = 'p';
+
+    /** Attempts of {@see download()}: each one continues from where the last one broke off. */
+    public const int DOWNLOAD_ATTEMPTS = 3;
+
+    /** Pause before the 2nd attempt, doubled before the 3rd. */
+    private const int DOWNLOAD_BACKOFF_MS = 1000;
 
     /** @internal Reach it through {@see \Flytachi\Winter\SDK\S5w\S5w::files()}. */
     public function __construct(
@@ -147,6 +159,140 @@ final readonly class Files
         }
 
         return $bytes;
+    }
+
+    /**
+     * Download a file to disk — any size, in constant memory, resumable.
+     *
+     * ```
+     * $d = $s5w->files()->download($file, '/var/data/');        // into a folder: the file's own name
+     * $d = $s5w->files()->download($id, '/var/data/report.pdf'); // to a path of your choosing
+     * $d->path;   // /var/data/report.pdf
+     * ```
+     *
+     * - The bytes go to `<target>.part` and are renamed to the target only when complete, so
+     *   a file under the final name is always whole. The `.part` is locked: a second process
+     *   downloading the same target is refused instead of corrupting it.
+     * - A broken connection is retried {@see DOWNLOAD_ATTEMPTS} times, each continuing with a
+     *   `Range` from where it stopped. When they run out, the `.part` stays, and a later call
+     *   to the same target picks it up — unless the file changed on the server meanwhile
+     *   (its `ETag` is kept next to it in `<target>.part.etag`), then it starts over.
+     * - No total time limit: the transfer is cut only when it stalls ({@see HttpClient::DOWNLOAD_IDLE}).
+     * - Passing the `File` (not just its id) checks the result against the file's sha256.
+     *
+     * Every call counts as a delivery in the bucket's traffic.
+     *
+     * @param string|File $file       the file's id, or the file itself
+     * @param string      $to         a file path, or a folder (an existing one, or a path ending in `/`):
+     *                                then the file's name is used
+     * @param bool        $overwrite  replace a file already at the target; false — that is an error
+     * @param bool        $resume     continue a `.part` left by an earlier call; false — start over
+     * @param (callable(int $received, int $total): void)|null $onProgress bytes on disk so far, of the whole
+     *
+     * @throws NotFoundException            no such file in this bucket (or not a valid id — without a request)
+     * @throws DownloadInterruptedException the connection kept breaking — the `.part` is kept for a later call
+     * @throws ResponseException            the bytes do not match the file's sha256 (only with a `File`)
+     * @throws S5wException                 the target exists (without `$overwrite`), its folder does not,
+     *                                      it cannot be written, or another process is downloading it
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filesdownload Files::download()
+     */
+    public function download(
+        string|File $file,
+        string $to,
+        bool $overwrite = false,
+        bool $resume = true,
+        ?callable $onProgress = null,
+    ): Download {
+        $path = self::deliveryPath($file);
+        $id = $file instanceof File ? $file->id : $file;
+        $toFolder = self::isFolder($to);
+
+        // When the name is already known, a target in the way is refused before any request.
+        $name = $file instanceof File ? self::safeName($file->name, $id) : null;
+        if ($name !== null || !$toFolder) {
+            self::assertFree(self::target($to, $name ?? basename($to)), $overwrite);
+        }
+
+        // The headers first: the size, the type, the ETag that guards a resume — and the name.
+        $head = $this->http->head($path);
+        $size = (int) $head->header('Content-Length');
+        $etag = (string) $head->header('ETag');
+        $mime = (string) ($head->header('Content-Type') ?? 'application/octet-stream');
+        $name ??= $toFolder
+            ? self::safeName(self::dispositionName($head->header('Content-Disposition')) ?? $id, $id)
+            : basename($to);
+
+        $target = self::target($to, $name);
+        self::assertFree($target, $overwrite);
+
+        $part = $target . '.part';
+        $etagFile = $part . '.etag';
+        $handle = @fopen($part, 'c+b');
+        if ($handle === false) {
+            throw new S5wException("S5W: cannot write {$part}");
+        }
+        if (!flock($handle, LOCK_EX | LOCK_NB)) {
+            fclose($handle);
+            throw new S5wException("S5W: {$target} is being downloaded by another process");
+        }
+
+        $log = $this->http->logger();
+        try {
+            // A .part from before is only worth keeping if it is of this very version of the file.
+            $kept = self::partSize($handle);
+            $resumable = $resume && $kept > 0 && $kept <= $size && is_file($etagFile)
+                && file_get_contents($etagFile) === $etag && $etag !== '';
+            if (!$resumable && $kept > 0) {
+                ftruncate($handle, 0);
+            }
+            if ($etag !== '') {
+                file_put_contents($etagFile, $etag);
+            }
+            $resumed = $resumable;
+            if ($resumable) {
+                $log->debug('download {id} resumed at {offset} of {size} bytes', [
+                    'id' => $id, 'offset' => $kept, 'size' => $size,
+                ]);
+            }
+
+            $this->fetchInto($handle, $path, $id, $part, $size, $etag, $onProgress);
+
+            $verified = false;
+            if ($file instanceof File) {
+                fflush($handle);
+                if (!hash_equals(strtolower($file->content->hash), (string) hash_file('sha256', $part))) {
+                    ftruncate($handle, 0);
+                    @unlink($etagFile);
+                    throw new ResponseException("S5W {$path}: the downloaded bytes do not match the file's sha256");
+                }
+                $verified = true;
+            }
+
+            fflush($handle);
+            if (!rename($part, $target)) {
+                throw new S5wException("S5W: cannot move {$part} to {$target}");
+            }
+            @unlink($etagFile);
+            $log->debug('download {id} completed: {path}, {size} bytes', [
+                'id' => $id, 'path' => $target, 'size' => $size,
+            ]);
+
+            return new Download($target, $name, $size, $mime, $resumed, $verified);
+        } catch (ApiException $e) {
+            // The file is gone or the key refused: nothing to resume.
+            ftruncate($handle, 0);
+            @unlink($etagFile);
+            throw $e;
+        } finally {
+            $empty = self::partSize($handle) === 0;
+            flock($handle, LOCK_UN);
+            fclose($handle);
+            if ($empty && is_file($part)) {
+                @unlink($part);
+                @unlink($etagFile);
+            }
+        }
     }
 
     /**
@@ -405,6 +551,208 @@ final readonly class Files
         }
 
         return $path;
+    }
+
+    /**
+     * The download loop: until the `.part` holds `$size` bytes, ask for the rest; a broken
+     * connection is retried, each attempt continuing where the last stopped.
+     *
+     * @param resource $handle
+     * @param (callable(int, int): void)|null $onProgress
+     */
+    private function fetchInto(
+        $handle,
+        string $path,
+        string $id,
+        string $part,
+        int $size,
+        string $etag,
+        ?callable $onProgress,
+    ): void {
+        $log = $this->http->logger();
+        $failures = 0;
+        $reported = -1;
+        $report = $onProgress === null ? null : static function (int $received) use ($onProgress, $size, &$reported) {
+            if ($received > $reported) {
+                $reported = $received;
+                $onProgress($received, $size);
+            }
+        };
+
+        while (($offset = self::partSize($handle)) < $size || $size === 0) {
+            $headers = [];
+            if ($offset > 0) {
+                $headers['Range'] = "bytes={$offset}-";
+                if ($etag !== '') {
+                    $headers['If-Range'] = $etag;   // changed on the server → the whole file, 200
+                }
+            }
+            fseek($handle, $offset);
+            $progress = $report === null ? null : static fn(int $got) => $report($offset + $got);
+
+            try {
+                $response = $this->http->download($path, $handle, $headers, $progress);
+            } catch (TransportException $e) {
+                fflush($handle);
+                $failures++;
+                $now = self::partSize($handle);
+                if ($failures >= self::DOWNLOAD_ATTEMPTS) {
+                    $log->error('download {id} interrupted at {offset} of {size} after {attempts} attempts: {error}', [
+                        'id' => $id, 'offset' => $now, 'size' => $size, 'attempts' => $failures,
+                        'error' => $e->getMessage(),
+                    ]);
+                    throw new DownloadInterruptedException($id, $part, $now, $size, $e);
+                }
+                $delay = self::DOWNLOAD_BACKOFF_MS * (2 ** ($failures - 1));
+                $log->warning('download {id} broke off at {offset} of {size} (attempt {attempt}/{attempts}), '
+                    . 'resuming in {delay} ms: {error}', [
+                    'id' => $id, 'offset' => $now, 'size' => $size, 'attempt' => $failures,
+                    'attempts' => self::DOWNLOAD_ATTEMPTS, 'delay' => $delay, 'error' => $e->getMessage(),
+                ]);
+                usleep($delay * 1000);
+                continue;
+            }
+            fflush($handle);
+
+            $status = $response->getStatusCode();
+            if ($status === 416) {
+                // The .part does not fit the file (it shrank, or is not this file): start over.
+                ftruncate($handle, 0);
+                if ($size === 0) {
+                    return;
+                }
+                continue;
+            }
+            if ($status === 200 && $offset > 0) {
+                // The server sent the whole file (it changed since the .part was started):
+                // it went in after the old bytes — move it to the start.
+                self::shiftToStart($handle, $offset);
+            }
+            if ($size === 0) {
+                return;
+            }
+            if (self::partSize($handle) < $size) {
+                // The answer ended early without an error: count it as a broken attempt.
+                $failures++;
+                if ($failures >= self::DOWNLOAD_ATTEMPTS) {
+                    $now = self::partSize($handle);
+                    throw new DownloadInterruptedException(
+                        $id,
+                        $part,
+                        $now,
+                        $size,
+                        new ResponseException("S5W {$path}: the answer ended at {$now} of {$size} bytes"),
+                    );
+                }
+            }
+        }
+
+        if (self::partSize($handle) > $size) {
+            ftruncate($handle, 0);
+            throw new ResponseException("S5W {$path}: the server sent more bytes than the file has");
+        }
+    }
+
+    /** `$to` names a folder: an existing one, or a path ending in a separator. */
+    private static function isFolder(string $to): bool
+    {
+        return is_dir($to) || str_ends_with($to, '/') || str_ends_with($to, DIRECTORY_SEPARATOR);
+    }
+
+    /** @throws S5wException something is already at `$target` and may not be replaced */
+    private static function assertFree(string $target, bool $overwrite): void
+    {
+        if (is_dir($target)) {
+            throw new S5wException("S5W: {$target} is a folder");
+        }
+        if (file_exists($target) && !$overwrite) {
+            throw new S5wException("S5W: {$target} already exists — pass overwrite: true to replace it");
+        }
+    }
+
+    /**
+     * Where the file goes: `$to` itself, or `$to/<name>` when `$to` is a folder.
+     *
+     * @throws S5wException the folder does not exist
+     */
+    private static function target(string $to, string $name): string
+    {
+        if ($to === '') {
+            throw new S5wException('S5W: download() needs a target path');
+        }
+        if (self::isFolder($to)) {
+            $dir = rtrim($to, '/' . DIRECTORY_SEPARATOR);
+            $dir = $dir === '' ? DIRECTORY_SEPARATOR : $dir;
+            if (!is_dir($dir)) {
+                throw new S5wException("S5W: folder {$dir} does not exist");
+            }
+
+            return rtrim($dir, '/' . DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $name;
+        }
+        if (!is_dir(dirname($to))) {
+            throw new S5wException('S5W: folder ' . dirname($to) . ' does not exist');
+        }
+
+        return $to;
+    }
+
+    /** The name from `Content-Disposition`: the UTF-8 `filename*` first, then `filename`. */
+    private static function dispositionName(?string $header): ?string
+    {
+        if ($header === null) {
+            return null;
+        }
+        if (preg_match("/filename\\*\\s*=\\s*UTF-8''([^;]+)/i", $header, $m)) {
+            return rawurldecode(trim($m[1]));
+        }
+        if (preg_match('/filename\s*=\s*"([^"]*)"/i', $header, $m)) {
+            return $m[1];
+        }
+
+        return null;
+    }
+
+    /** A name safe to put in a path: no separators, no control characters, not `.` or `..`. */
+    private static function safeName(string $name, string $fallback): string
+    {
+        $name = str_replace(['/', '\\'], '_', $name);
+        $name = (string) preg_replace('/[\x00-\x1F\x7F]/u', '', $name);
+        $name = trim($name, " \t.");
+
+        return $name === '' ? $fallback : $name;
+    }
+
+    /** @param resource $handle */
+    private static function partSize($handle): int
+    {
+        $stat = fstat($handle);
+
+        return $stat === false ? 0 : (int) $stat['size'];
+    }
+
+    /**
+     * Moves bytes `[$offset, end)` of the open file to its start and cuts the rest — a whole
+     * file that landed after a stale beginning. Reads always run ahead of writes.
+     *
+     * @param resource $handle
+     */
+    private static function shiftToStart($handle, int $offset): void
+    {
+        $read = $offset;
+        $write = 0;
+        while (true) {
+            fseek($handle, $read);
+            $chunk = fread($handle, 1024 * 1024);
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            fseek($handle, $write);
+            fwrite($handle, $chunk);
+            $read += strlen($chunk);
+            $write += strlen($chunk);
+        }
+        ftruncate($handle, $write);
+        fflush($handle);
     }
 
     /** `p/{id}` — where the file's bytes are served; a malformed id is a 404 without a request. */

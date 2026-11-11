@@ -94,8 +94,12 @@ $folder = $s5w->folders()->ensure('reports');
 $csv   = $s5w->files()->uploadContent("date,total\n2026-11-01,42\n", 'november.csv', folder: $folder);
 $notes = $s5w->files()->upload('/tmp/notes.txt', folder: $folder);
 
-// read a small file back into memory (up to 16 MiB)
+// read a small file back into memory (up to 16 MiB), or download any file to disk
 $text = $s5w->files()->contents($notes);
+$s5w->files()->download($notes, '/tmp/');
+
+// a link that opens without a key, for a day
+$url = $s5w->links()->issue($notes, ttl: 86400)->url;
 
 // list, rename, delete
 foreach ($s5w->files()->list(folder: $folder) as $file) {
@@ -241,12 +245,8 @@ upload b3b53a23-… completed: backup.sql → file VVWEoDe7rh0FGbCx
 
 ## Status
 
-The SDK covers checking the key, folders, files, uploads and reading small files into memory
-(`contents()`). **Not in the SDK yet:** downloading to disk (`download()`) and temporary links
-(`links()`). Until then use the
-ready-made `privateUrl` / `publicUrl` of a `File`, or the
-[delivery](https://winterframe.net/apps/s5w/delivery) and
-[links](https://winterframe.net/apps/s5w/links) API directly.
+The SDK covers checking the key, folders, files, uploads, downloads (`contents()` into memory,
+`download()` to disk, resumable) and temporary links (`links()`).
 
 ## Documentation
 
