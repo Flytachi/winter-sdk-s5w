@@ -10,8 +10,10 @@ use Flytachi\Winter\SDK\S5w\Entity\Page;
 use Flytachi\Winter\SDK\S5w\Enum\FileSort;
 use Flytachi\Winter\SDK\S5w\Enum\SortDirection;
 use Flytachi\Winter\SDK\S5w\Exception\ConflictException;
+use Flytachi\Winter\SDK\S5w\Exception\ContentTooLargeException;
 use Flytachi\Winter\SDK\S5w\Exception\NotFoundException;
 use Flytachi\Winter\SDK\S5w\Exception\PayloadTooLargeException;
+use Flytachi\Winter\SDK\S5w\Exception\ResponseException;
 use Flytachi\Winter\SDK\S5w\Exception\ValidationException;
 use Flytachi\Winter\SDK\S5w\Http\HttpClient;
 use Flytachi\Winter\SDK\S5w\Option\ImageOptions;
@@ -34,6 +36,7 @@ use Flytachi\Winter\SDK\S5w\Support\Source;
  * $s5w->files()->move($file, 'archive');                        // or Folder::ROOT for the root
  * $s5w->files()->update($file, 'Q3-final.pdf', 'archive');       // both at once, one request
  * $s5w->files()->delete($file);
+ * $bytes = $s5w->files()->contents($file);                    // the bytes, up to 16 MiB
  * foreach ($s5w->files()->all(folder: Folder::ROOT) as $file) { … }
  * ```
  *
@@ -48,6 +51,11 @@ final readonly class Files
      * body at 32 MiB; the rest is room for the multipart framing and the fields.
      */
     public const int SINGLE_REQUEST_LIMIT = 32 * 1024 * 1024 - 64 * 1024;
+
+    /** The default limit of {@see contents()}: the same 16 MiB above which uploads go in chunks. */
+    public const int CONTENTS_LIMIT = 16 * 1024 * 1024;
+
+    private const string DELIVERY_PATH = 'p';
 
     /** @internal Reach it through {@see \Flytachi\Winter\SDK\S5w\S5w::files()}. */
     public function __construct(
@@ -93,6 +101,52 @@ final readonly class Files
     public function exists(string|File $id): bool
     {
         return $this->find($id) !== null;
+    }
+
+    /**
+     * The file's bytes as a string — for small files: a JSON document, an image to process.
+     * The whole file is held in memory, so it is capped: 16 MiB unless `$maxSize` says
+     * otherwise. Larger files belong on disk.
+     *
+     * ```
+     * $data  = json_decode($s5w->files()->contents($id), true);
+     * $image = imagecreatefromstring($s5w->files()->contents($file, maxSize: 50 * 1024 * 1024));
+     * ```
+     *
+     * Passing the `File` (not just its id) buys two things: a file over the limit is refused
+     * without a request, and the bytes are checked against the file's sha256.
+     *
+     * Every call counts as a delivery in the bucket's traffic, like any download.
+     *
+     * @param string|File $file    the file's id, or the file itself
+     * @param int|null    $maxSize the limit in bytes; null — {@see CONTENTS_LIMIT}
+     *
+     * @throws NotFoundException         no such file in this bucket (or not a valid id — without a request)
+     * @throws ContentTooLargeException  over the limit
+     * @throws ResponseException         the bytes do not match the file's sha256 (only with a `File`)
+     *
+     * @link https://winterframe.net/packages/sdk-s5w/api-reference#filescontents Files::contents()
+     */
+    public function contents(string|File $file, ?int $maxSize = null): string
+    {
+        $limit = $maxSize ?? self::CONTENTS_LIMIT;
+        if ($limit < 1) {
+            throw new \InvalidArgumentException("S5W: maxSize must be positive, {$limit} given");
+        }
+
+        $path = self::deliveryPath($file);
+        $id = $file instanceof File ? $file->id : $file;
+        if ($file instanceof File && $file->content->size > $limit) {
+            throw new ContentTooLargeException($id, $limit, $file->content->size);
+        }
+
+        $bytes = $this->http->fetch($path, $id, $limit);
+
+        if ($file instanceof File && !hash_equals(strtolower($file->content->hash), hash('sha256', $bytes))) {
+            throw new ResponseException("S5W {$path}: the content does not match the file's sha256");
+        }
+
+        return $bytes;
     }
 
     /**
@@ -348,6 +402,20 @@ final readonly class Files
         $path = self::PATH . '/' . rawurlencode($id);
         if (!File::isValidId($id)) {
             throw NotFoundException::from(404, 'File does not exist (not a valid file id)', [], $method, $path);
+        }
+
+        return $path;
+    }
+
+    /** `p/{id}` — where the file's bytes are served; a malformed id is a 404 without a request. */
+    private static function deliveryPath(string|File $id): string
+    {
+        if ($id instanceof File) {
+            return self::DELIVERY_PATH . '/' . $id->id;
+        }
+        $path = self::DELIVERY_PATH . '/' . rawurlencode($id);
+        if (!File::isValidId($id)) {
+            throw NotFoundException::from(404, 'File does not exist (not a valid file id)', [], 'GET', $path);
         }
 
         return $path;

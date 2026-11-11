@@ -8,9 +8,11 @@ use Composer\InstalledVersions;
 use Flytachi\Winter\Cast\Client\CastClient;
 use Flytachi\Winter\Cast\Client\RetryPolicy;
 use Flytachi\Winter\Cast\Exception\CastException;
+use Flytachi\Winter\Cast\Exception\TooLargeException;
 use Flytachi\Winter\Cast\Message\CastRequest;
 use Flytachi\Winter\Cast\Message\CastResponse;
 use Flytachi\Winter\SDK\S5w\Exception\ApiException;
+use Flytachi\Winter\SDK\S5w\Exception\ContentTooLargeException;
 use Flytachi\Winter\SDK\S5w\Exception\ResponseException;
 use Flytachi\Winter\SDK\S5w\Exception\TransportException;
 use Flytachi\Winter\SDK\S5w\S5wConfig;
@@ -153,6 +155,33 @@ final class HttpClient
         return $this->request($method, $path, $query, $headers)
             ->withTimeout($this->config->transferTimeout, $this->config->connectTimeout)
             ->withoutRetry();
+    }
+
+    /**
+     * The bytes of a file from the delivery endpoint (`p/{id}`), into memory, at most
+     * `$maxSize` of them: a larger file is cut off by `Content-Length` before it is
+     * downloaded, or as soon as the received bytes pass the limit.
+     *
+     * A GET, so it is retried like an ordinary call; with the transfer timeout, since it
+     * carries file bytes.
+     *
+     * @throws ContentTooLargeException over `$maxSize`
+     */
+    public function fetch(string $path, string $fileId, int $maxSize): string
+    {
+        $request = $this->request('GET', $path)
+            ->withAccept('*/*')
+            ->withTimeout($this->config->transferTimeout, $this->config->connectTimeout)
+            ->withMaxResponseSize($maxSize);
+
+        try {
+            return $this->send($request, 'GET', $path)->body();
+        } catch (TransportException $e) {
+            if ($e->getPrevious() instanceof TooLargeException) {
+                throw new ContentTooLargeException($fileId, $maxSize, null, $e->getPrevious());
+            }
+            throw $e;
+        }
     }
 
     /** Sends a prepared request and decodes its JSON answer. */

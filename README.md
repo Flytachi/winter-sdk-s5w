@@ -74,7 +74,7 @@ admin panel. The bucket is decided by the key — it is never configured in the 
 | Key | Opens |
 |---|---|
 | `FULL` | everything: `check()`, `folders()`, `files()`, `uploads()` |
-| `BASIC` | `check()` and `/p/{id}` delivery only |
+| `BASIC` | `check()` and reading files — `files()->contents()` (the `/p/{id}` delivery) |
 
 ---
 
@@ -93,6 +93,9 @@ $folder = $s5w->folders()->ensure('reports');
 // upload from memory and from disk
 $csv   = $s5w->files()->uploadContent("date,total\n2026-11-01,42\n", 'november.csv', folder: $folder);
 $notes = $s5w->files()->upload('/tmp/notes.txt', folder: $folder);
+
+// read a small file back into memory (up to 16 MiB)
+$text = $s5w->files()->contents($notes);
 
 // list, rename, delete
 foreach ($s5w->files()->list(folder: $folder) as $file) {
@@ -238,8 +241,9 @@ upload b3b53a23-… completed: backup.sql → file VVWEoDe7rh0FGbCx
 
 ## Status
 
-The SDK covers checking the key, folders, files and uploads. **Not in the SDK yet:**
-downloading (`download()`, `contents()`) and temporary links (`links()`). Until then use the
+The SDK covers checking the key, folders, files, uploads and reading small files into memory
+(`contents()`). **Not in the SDK yet:** downloading to disk (`download()`) and temporary links
+(`links()`). Until then use the
 ready-made `privateUrl` / `publicUrl` of a `File`, or the
 [delivery](https://winterframe.net/apps/s5w/delivery) and
 [links](https://winterframe.net/apps/s5w/links) API directly.
