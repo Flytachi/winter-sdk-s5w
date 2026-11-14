@@ -27,6 +27,8 @@ final readonly class Link implements \JsonSerializable
         public ?int $id,
         /** The address to hand out: `https://…/t/…`. */
         public string $url,
+        /** The file the link leads to; null only from an S5W older than 1.2.0, which does not send it. */
+        public ?FileRef $file,
         public \DateTimeImmutable $expiresAt,
         /** Can be revoked on its own. */
         public bool $revocable,
@@ -44,9 +46,12 @@ final readonly class Link implements \JsonSerializable
     /** @internal */
     public static function fromPayload(Payload $p): self
     {
+        $file = $p->objectOrNull('file');   // absent before S5W 1.2.0
+
         return new self(
             id: $p->intOrNull('id'),
             url: $p->string('url'),
+            file: $file === null ? null : FileRef::fromPayload($file),
             expiresAt: $p->time('expiresAt'),
             revocable: $p->bool('revocable'),
             maxDownloads: $p->intOrNull('maxDownloads'),
@@ -99,6 +104,7 @@ final readonly class Link implements \JsonSerializable
         return [
             'id' => $this->id,
             'url' => $this->url,
+            'file' => $this->file?->toArray(),
             'expiresAt' => $this->expiresAt->format(\DATE_ATOM),
             'revocable' => $this->revocable,
             'maxDownloads' => $this->maxDownloads,

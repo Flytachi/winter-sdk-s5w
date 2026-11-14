@@ -22,6 +22,7 @@ use Flytachi\Winter\SDK\S5w\S5wException;
  *     disposition: Disposition::ATTACHMENT, maxDownloads: 3, note: 'for the contractor');
  *
  * $s5w->links()->ofFile($file);       // the file's last 20 tracked links
+ * $link->file->id;                    // the file a link leads to (S5W 1.2.0+)
  * $s5w->links()->list(search: 'invoice'); // Page<Link> — the bucket's tracked links
  * $s5w->links()->revoke($link);       // a tracked one
  * $s5w->links()->revokeAll();         // all of them, signed ones included
